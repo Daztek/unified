@@ -3,7 +3,6 @@
 Binaries/
 build-nwnx/
 build/
-Documentation/
 
 cmake-build-*/
 .env
@@ -16,5 +15,3 @@ CMakePresets.json
 .cache/
 Build/
 
-# SWIG
-Plugins/SWIG/SWIG_*/NWNXLib.i

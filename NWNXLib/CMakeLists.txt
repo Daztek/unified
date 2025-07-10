@@ -38,7 +38,6 @@ add_subdirectory(Services)
 add_subdirectory(Utils)
 
 add_library(NWNXLib STATIC "${NWNXLIB_SOURCE}")
-add_sanitizers(NWNXLib)
 
 target_compile_definitions(NWNXLib PRIVATE "-DPLUGIN_NAME=\"NWNXLib\"")
 

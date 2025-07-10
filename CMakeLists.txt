@@ -9,15 +9,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModu
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-# Includes the sanitizer package to facilitate debugging.
-# If you want to build with this support (I suggest you do), you should pass in one or all of the following:
-# -DSANITIZE_UNDEFINED=On
-# -DSANITIZE_THREAD=On
-# -DSANITIZE_MEMORY=On
-# -DSANITIZE_ADDRESS=On
-find_package(Sanitizers)
-
-execute_process(COMMAND git rev-parse --short HEAD OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE SHORT_HASH)
 set(TARGET_NWN_BUILD 8193)
 set(TARGET_NWN_BUILD_REVISION 37)
 set(TARGET_NWN_BUILD_POSTFIX 15)
@@ -36,7 +27,6 @@ function(add_shared_plugin target)
 endfunction()
 
 function(configure_plugin target)
-    add_sanitizers(${target})
     target_link_libraries(${target} Core)
     set_target_properties(${target} PROPERTIES PREFIX "${PLUGIN_PREFIX}")
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -86,9 +76,6 @@ add_subdirectory(NWNXLib)
 # The core shared library.
 add_subdirectory(Core)
 
-# The documentation generation.
-add_subdirectory(docgen)
-
 # Detect every plugin and store it in plugins . . .
 file(GLOB plugins Plugins/*/CMakeLists.txt)
 
@@ -103,8 +90,3 @@ foreach(plugin ${plugins})
     get_filename_component(pluginPath ${plugin} PATH)
     add_subdirectory(${pluginPath})
 endforeach(plugin)
-
-# Allow specifying out of tree plugins by putting their paths in an env. variable
-foreach(addplugin $ENV{NWNX_ADDITIONAL_PLUGINS})
-    add_subdirectory(${addplugin} ${CMAKE_BINARY_DIR}/custom)
-endforeach(addplugin)

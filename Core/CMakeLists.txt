@@ -2,7 +2,6 @@
 # ------------------------------------------------------
 
 add_library(Core SHARED ${ENTRYPOINT} NWNXCore.cpp NWNXCoreVM.cpp)
-add_sanitizers(Core)
 set_target_properties(Core PROPERTIES PREFIX "${PLUGIN_PREFIX}")
 target_compile_definitions(Core PRIVATE "-DPLUGIN_NAME=\"${PLUGIN_PREFIX}Core\"")
 target_link_libraries(Core NWNXLib)
