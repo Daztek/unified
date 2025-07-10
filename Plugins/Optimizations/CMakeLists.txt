@@ -1,0 +1,9 @@
+add_plugin(Optimizations
+        "AsyncLogFlush.cpp"
+        "GameObjectLookup.cpp"
+        "LuoLookup.cpp"
+        "PlayerLookup.cpp"
+        "CacheScriptChunks.cpp"
+        "CacheDebuggerInstances.cpp"
+        "CacheScripts.cpp"
+)
