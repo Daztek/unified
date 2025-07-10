@@ -13,9 +13,7 @@ void* Plugin::GetExportedSymbol(const std::string& symbolName)
     return dlsym(m_handle, symbolName.c_str());
 }
 
-Plugin::Plugin(Services::ProxyServiceList* services) :
-    m_services(services) { }
-
+Plugin::Plugin() { }
 
 Plugin* Plugin::Find(const std::string& pluginName)
 {
@@ -27,7 +25,7 @@ Plugin* Plugin::Find(const std::string& pluginName)
     return nullptr;
 }
 
-Plugin* Plugin::Load(const std::string& path, std::unique_ptr<Services::ProxyServiceList>&& services)
+Plugin* Plugin::Load(const std::string& path)
 {
     auto basename = String::Basename(path);
 
@@ -45,24 +43,7 @@ Plugin* Plugin::Load(const std::string& path, std::unique_ptr<Services::ProxySer
         return nullptr;
     }
 
-    Plugin* plugin;
-    if (auto entry = (EntryFunction) dlsym(handle, PluginEntryName))
-    {
-        LOG_DEBUG("Plugin '%s' exposed entry function %s()", path, PluginEntryName);
-        plugin = entry(services.get());
-        if (plugin == nullptr)
-        {
-            LOG_ERROR("Plugin '%s' entry function returned nullptr", path);
-            dlclose(handle);
-            return nullptr;
-        }
-    }
-    else
-    {
-        plugin = new Plugin(services.get());
-    }
-
-    plugin->m_servicesOwning = std::move(services);
+    Plugin* plugin = new Plugin();
     plugin->m_name = basename;
     plugin->m_path = path;
     plugin->m_handle = handle;

@@ -22,7 +22,6 @@
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
-using namespace NWNXLib::Services;
 
 static CExoLinkedListNode* FindTURD(std::string playerName, std::string characterName)
 {

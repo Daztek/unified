@@ -7,7 +7,6 @@ namespace Events {
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
-using namespace NWNXLib::Services;
 
 static NWNXLib::Hooks::Hook s_HandlePlayerToServerPVPListOperationsHook;
 

@@ -320,36 +320,22 @@ struct ScopeGuard {
 
 #include "Instrumentation.hpp"
 
-// TODO: Remove entry points
-//todo: remove with Plugin
-#include "Services/Services.hpp"
-#define NWNX_PLUGIN_ENTRY extern "C"
 namespace NWNXLib {
 class Plugin
 {
 public:
-    using EntryFunction = Plugin*(*)(Services::ProxyServiceList*);
-
-    Plugin(Services::ProxyServiceList*);
+    Plugin();
     virtual ~Plugin() {}
-
-    Services::ProxyServiceList* GetServices() { return m_services; }
     std::string GetName() { return m_name; }
-
     void* GetExportedSymbol(const std::string& symbolName);
-
     static Plugin* Find(const std::string& pluginName);
-    static Plugin* Load(const std::string& path, std::unique_ptr<Services::ProxyServiceList>&& services);
+    static Plugin* Load(const std::string& path);
     static void UnloadAll();
 
 private:
     std::string m_name;
     std::string m_path;
     void* m_handle;
-    // HACK: While the API is migrated, we need both of these..
-    Services::ProxyServiceList* m_services;
-    std::unique_ptr<Services::ProxyServiceList> m_servicesOwning;
-
     static inline std::vector<Plugin*> s_plugins;
 };
 }

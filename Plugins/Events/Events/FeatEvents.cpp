@@ -6,7 +6,6 @@ namespace Events {
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
-using namespace NWNXLib::Services;
 
 static Hooks::Hook s_UseFeatHook;
 static Hooks::Hook s_HasFeatHook;

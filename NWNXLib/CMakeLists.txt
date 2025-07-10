@@ -34,7 +34,6 @@ nwnxlib_add(
 add_subdirectory(API)
 add_subdirectory(External)
 add_subdirectory(Platform)
-add_subdirectory(Services)
 add_subdirectory(Utils)
 
 add_library(NWNXLib STATIC "${NWNXLIB_SOURCE}")

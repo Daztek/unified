@@ -160,27 +160,6 @@ void NWNXCore::CleanupPreload()
     setenv("LD_PRELOAD", newPreload.c_str(), true);
 }
 
-std::unique_ptr<Services::ServiceList> NWNXCore::ConstructCoreServices()
-{
-    using namespace NWNXLib::Services;
-    std::unique_ptr<ServiceList> services = std::make_unique<ServiceList>();
-
-    services->m_metrics = std::make_unique<Services::Metrics>();
-
-    return services;
-}
-
-std::unique_ptr<Services::ProxyServiceList> NWNXCore::ConstructProxyServices(const std::string& plugin)
-{
-    std::unique_ptr<Services::ProxyServiceList> proxyServices = std::make_unique<Services::ProxyServiceList>();
-
-    proxyServices->m_metrics = std::make_unique<Services::MetricsProxy>(*m_services->m_metrics, plugin);
-
-    ConfigureLogLevel(plugin);
-
-    return proxyServices;
-}
-
 void NWNXCore::ConfigureLogLevel(const std::string& plugin)
 {
     // Setup the log level. We do this first by checking if NWNX_<PLUGIN>_LOG_LEVEL is set.
@@ -343,12 +322,7 @@ void NWNXCore::InitialSetupPlugins()
             continue; // Not a plugin.
         }
 
-        if (pluginNameWithoutExtension == "NWNX_Experimental" && !Config::Get<bool>("LOAD_EXPERIMENTAL_PLUGIN", false))
-        {
-            continue;
-        }
-
-        auto services = ConstructProxyServices(pluginNameWithoutExtension);
+        ConfigureLogLevel(pluginNameWithoutExtension);
 
         // Always load core.
         if (pluginNameWithoutExtension != NWNX_CORE_PLUGIN_NAME && Config::Get<bool>("SKIP", (bool)skipAllPlugins, pluginNameWithoutExtension))
@@ -356,7 +330,8 @@ void NWNXCore::InitialSetupPlugins()
             LOG_INFO("Skipping plugin %s due to configuration.", pluginNameWithoutExtension);
             continue;
         }
-        Plugin::Load(pluginDir + "/" + pluginName, std::move(services));
+
+        Plugin::Load(pluginDir + "/" + pluginName);
     }
 }
 
@@ -545,19 +520,11 @@ void NWNXCore::InitialSetupCommands()
 
 }
 
-
-void NWNXCore::UnloadServices()
-{
-    m_coreServices.reset();
-    m_services.reset();
-}
-
 void NWNXCore::Shutdown()
 {
     if (g_core)
     {
         Plugin::UnloadAll();
-        UnloadServices();
         Tasks::StopAsyncWorkers();
         g_core = nullptr;
         if (Config::Get<bool>("HARD_EXIT", false))
@@ -569,9 +536,7 @@ void NWNXCore::CreateServerHandler(CAppManager* app)
 {
     InitCrashHandlers();
     g_core->InitialVersionCheck();
-
-    g_core->m_services = g_core->ConstructCoreServices();
-    g_core->m_coreServices = g_core->ConstructProxyServices(NWNX_CORE_PLUGIN_NAME);
+    g_core->ConfigureLogLevel(NWNX_CORE_PLUGIN_NAME);
 
     // We need to set the NWNXLib log level (separate from Core now) to match the core log level.
     Log::SetLogLevel("NWNXLib", Log::GetLogLevel(NWNX_CORE_PLUGIN_NAME));
@@ -603,7 +568,6 @@ void NWNXCore::CreateServerHandler(CAppManager* app)
             g_core->InitialSetupPlugins();
             g_core->InitialSetupResourceDirectories();
             g_core->InitialSetupCommands();
-            MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_NWNX_LOADED" });
         }
         catch (const std::runtime_error& ex)
         {
@@ -618,31 +582,14 @@ void NWNXCore::CreateServerHandler(CAppManager* app)
 void NWNXCore::DestroyServerHandler(CAppManager* app)
 {
     g_CoreShuttingDown = true;
-
-    if (auto shutdownScript = Config::Get<std::string>("SHUTDOWN_SCRIPT"))
-    {
-        if (Globals::AppManager()->m_pServerExoApp->GetServerMode() == 2)
-        {
-            LOG_NOTICE("Running module shutdown script: %s", *shutdownScript);
-            Utils::ExecuteScript(*shutdownScript, 0);
-        }
-    }
-
-    MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_DESTROY_SERVER" });
-
     g_core->m_destroyServerHook.reset();
     app->DestroyServer();
-
-    MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_DESTROY_SERVER_AFTER" });
-
     g_core->Shutdown();
-
     RestoreCrashHandlers();
 }
 
 int32_t NWNXCore::MainLoopInternalHandler(CServerExoAppInternal *pServerExoAppInternal)
 {
-    g_core->m_services->m_metrics->Update();
     Tasks::ProcessMainThreadWork();
     Commands::RunScheduled();
 

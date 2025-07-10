@@ -5,7 +5,6 @@ namespace Events {
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
-using namespace NWNXLib::Services;
 
 static Hooks::Hook s_SendServerToPlayerGuiTimingEventHook;
 static Hooks::Hook s_HandlePlayerToServerInputCancelGuiTimingEventHook;

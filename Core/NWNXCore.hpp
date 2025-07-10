@@ -16,8 +16,6 @@ public:
     NWNXCore();
     ~NWNXCore();
 
-    std::unique_ptr<NWNXLib::Services::ServiceList> m_services;
-
     const std::vector<std::string>& GetCustomResourceDirectoryAliases() const { return m_CustomResourceDirectoryAliases; }
 
 private:
@@ -26,11 +24,6 @@ private:
     NWNXLib::Hooks::Hook m_mainLoopInternalHook;
     NWNXLib::Hooks::Hook m_vmPlaySoundHook;
     NWNXLib::Hooks::Hook m_nwnxFunctionManagementHook;
-
-    std::unique_ptr<NWNXLib::Services::ProxyServiceList> m_coreServices;
-
-    std::unique_ptr<NWNXLib::Services::ServiceList> ConstructCoreServices();
-    std::unique_ptr<NWNXLib::Services::ProxyServiceList> ConstructProxyServices(const std::string& plugin);
 
     void CleanupPreload();
     void ConfigureLogLevel(const std::string& plugin);
@@ -41,7 +34,6 @@ private:
     void InitialSetupResourceDirectories();
     void InitialSetupCommands();
 
-    void UnloadServices();
     void Shutdown();
 
     static void CreateServerHandler(CAppManager*);
