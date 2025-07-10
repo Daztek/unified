@@ -21,84 +21,7 @@ using namespace NWNXLib;
 using namespace NWNXLib::API;
 using namespace NWNXLib::API::Constants;
 
-namespace {
-
-struct Command
-{
-    std::string plugin;
-    std::string event;
-    std::string operation;
-};
-
-std::optional<Command> ProcessNWNX(const CExoString& str)
-{
-    static const int  NWNX_ABI_VERSION = 2;
-
-    auto startsWith = [](const CExoString& str, const char *prefix) -> bool
-    {
-        auto len = std::strlen(prefix);
-        return str.m_sString && str.m_nBufferLength >= len && std::strncmp(prefix, str.m_sString, len) == 0;
-    };
-
-    if (startsWith(str, "NWNXEE!"))
-    {
-        int abi;
-        char plugin[256];
-        char event[256];
-        char operation[256];
-
-        int scanned = std::sscanf(str.m_sString,
-                            "NWNXEE!ABIv%d!%255[A-Za-z0-9_]!%255[A-Za-z0-9_]!%255[A-Za-z0-9_]",
-                            &abi, plugin, event, operation);
-
-        if (scanned == 4 && abi == NWNX_ABI_VERSION)
-        {
-            Command cmd;
-            cmd.plugin    = plugin;
-            cmd.event     = event;
-            cmd.operation = operation;
-            return std::make_optional<>(cmd);
-        }
-    }
-
-    return {};
-}
-
-}
-
 namespace Core {
-
-extern NWNXCore* g_core;
-
-int32_t NWNXCore::PlaySoundHandler(CNWSVirtualMachineCommands* thisPtr, int32_t nCommandId, int32_t nParameters)
-{
-    ASSERT(thisPtr); ASSERT(nCommandId == VMCommand::PlaySound); ASSERT(nParameters == 1);
-
-    CExoString sound;
-    if (!Globals::VirtualMachine()->StackPopString(&sound))
-        return VMError::StackUnderflow;
-
-    if (auto nwnx = ProcessNWNX(sound))
-    {
-        LOG_WARNING("Bad NWNX ABI call detected: \"%s_%s\" from %s.nss - ignored", nwnx->plugin, nwnx->event, Utils::GetCurrentScript());
-        LOG_WARNING("NWNX ABI has changed. Please update your \"nwnx_*.nss\" files and recompile all scripts.");
-        return VMError::Success;
-    }
-
-    if (thisPtr->m_bValidObjectRunScript)
-    {
-        if (auto *obj = Utils::AsNWSObject(Utils::GetGameObject(thisPtr->m_oidObjectRunScript)))
-        {
-            if (obj->m_bAbleToModifyActionQueue)
-            {
-                obj->AddAction(23, -1, 4, (CExoString*)&sound);
-            }
-
-        }
-    }
-
-    return VMError::Success;
-}
 
 int32_t NWNXCore::NWNXFunctionManagementHandler(CNWSVirtualMachineCommands* thisPtr, int32_t nCommandId, int32_t)
 {
@@ -121,11 +44,7 @@ int32_t NWNXCore::NWNXFunctionManagementHandler(CNWSVirtualMachineCommands* this
             if (!pVirtualMachine->StackPopString(&sPlugin) ||
                 !pVirtualMachine->StackPopString(&sFunction))
                 return VMError::StackUnderflow;
-
-            if (g_core->m_ScriptChunkRecursion == 0)
-                ScriptAPI::Call(sPlugin, sFunction);
-            else
-                LOG_NOTICE("NWNX function '%s_%s' in ExecuteScriptChunk() was blocked due to configuration", sFunction, sFunction);
+            ScriptAPI::Call(sPlugin, sFunction);
             break;
         }
 

@@ -22,10 +22,8 @@ private:
     NWNXLib::Hooks::Hook m_createServerHook;
     NWNXLib::Hooks::Hook m_destroyServerHook;
     NWNXLib::Hooks::Hook m_mainLoopInternalHook;
-    NWNXLib::Hooks::Hook m_vmPlaySoundHook;
     NWNXLib::Hooks::Hook m_nwnxFunctionManagementHook;
 
-    void CleanupPreload();
     void ConfigureLogLevel(const std::string& plugin);
 
     void InitialSetupHooks();
@@ -39,10 +37,8 @@ private:
     static void CreateServerHandler(CAppManager*);
     static void DestroyServerHandler(CAppManager*);
     static int32_t MainLoopInternalHandler(CServerExoAppInternal*);
-    static int32_t PlaySoundHandler(CNWSVirtualMachineCommands*, int32_t, int32_t);
     static int32_t NWNXFunctionManagementHandler(CNWSVirtualMachineCommands*, int32_t, int32_t);
 
-    int m_ScriptChunkRecursion;
     std::vector<std::string> m_CustomResourceDirectoryAliases;
 };
 

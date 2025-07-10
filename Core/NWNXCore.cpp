@@ -43,7 +43,6 @@ extern "C" void nwnx_signal_handler(int sig)
     std::fprintf(stdout, " NWNX Signal Handler:\n"
         "==============================================================\n"
         " NWNX %d.%d-%d (%s) has crashed. Fatal error: %s (%d).\n"
-        " Please file a bug at https://github.com/nwnxee/unified/issues\n"
         "==============================================================\n",
         NWNX_TARGET_NWN_BUILD, NWNX_TARGET_NWN_BUILD_REVISION, NWNX_TARGET_NWN_BUILD_POSTFIX, NWNX_BUILD_SHA, err, sig);
 
@@ -69,7 +68,7 @@ extern "C" void nwnx_signal_handler(int sig)
     }
 }
 
-// Don't allow the -quite flag to close stdout/stderr, we print important info there.
+// Don't allow the -quiet flag to close stdout/stderr, we print important info there.
 extern "C" FILE *freopen64(const char *filename, const char *mode, FILE *stream)
 {
     if ((stream == stdout || stream == stderr) && !strcmp(filename, "/dev/null"))
@@ -116,7 +115,6 @@ namespace NWNXLib::Tasks {
     void StopAsyncWorkers();
 }
 
-
 namespace Core {
 
 static NWNXCore s_core;
@@ -124,14 +122,8 @@ NWNXCore* g_core = nullptr; // Used to access the core class in hook or event ha
 bool g_CoreShuttingDown = false;
 
 NWNXCore::NWNXCore()
-    : m_ScriptChunkRecursion(0)
 {
     g_core = this;
-    CleanupPreload();
-
-    // NOTE: We should do the version check here, but the global in the binary hasn't been initialised yet at this point.
-    // This will be fixed in a future release of NWNX:EE. For now, the version check will happen *too late* - we may
-    // crash before the version check happens.
     std::printf("Starting NWNX %d.%d-%d [%s]\n", NWNX_TARGET_NWN_BUILD, NWNX_TARGET_NWN_BUILD_REVISION, NWNX_TARGET_NWN_BUILD_POSTFIX, NWNX_BUILD_SHA);
 
     // Initialise export table. New plugin code should endeavour to use direct linking
@@ -144,20 +136,6 @@ NWNXCore::NWNXCore()
 NWNXCore::~NWNXCore()
 {
     Shutdown();
-}
-
-void NWNXCore::CleanupPreload()
-{
-    const auto* preload = std::getenv("LD_PRELOAD");
-    const std::regex regex("(([^: ]+)?NWNX_[^: ]+)");
-
-    std::string newPreload = preload;
-    while (std::regex_search(newPreload, regex))
-    {
-        newPreload = std::regex_replace(newPreload, regex, "");
-    }
-
-    setenv("LD_PRELOAD", newPreload.c_str(), true);
 }
 
 void NWNXCore::ConfigureLogLevel(const std::string& plugin)
@@ -180,32 +158,11 @@ void NWNXCore::ConfigureLogLevel(const std::string& plugin)
 
 void NWNXCore::InitialSetupHooks()
 {
-    m_vmPlaySoundHook               = Hooks::HookFunction(&CNWSVirtualMachineCommands::ExecuteCommandPlaySound, &PlaySoundHandler, Hooks::Order::Final);
     m_nwnxFunctionManagementHook    = Hooks::HookFunction(&CNWSVirtualMachineCommands::ExecuteCommandNWNXFunctionManagement, &NWNXFunctionManagementHandler, Hooks::Order::Final);
     m_destroyServerHook             = Hooks::HookFunction(&CAppManager::DestroyServer, &DestroyServerHandler, Hooks::Order::Final);
     m_mainLoopInternalHook          = Hooks::HookFunction(&CServerExoAppInternal::MainLoop, &MainLoopInternalHandler, Hooks::Order::Final);
 
     POS::InitializeHooks();
-
-    static Hooks::Hook loadModuleInProgressHook = Hooks::HookFunction(&CNWSModule::LoadModuleInProgress,
-            +[](CNWSModule *pModule, int32_t nAreasLoaded, int32_t nAreasToLoad) -> uint32_t
-            {
-                int index = nAreasLoaded;
-                auto *node = pModule->m_lstModuleArea.m_pcExoLinkedListInternal->pHead;
-                while (node && index)
-                {
-                    node = node->pNext;
-                    index--;
-                }
-
-                if (node)
-                {
-                    auto *resref = (CResRef*)node->pObject;
-                    LOG_DEBUG("(%i/%i) Trying to load area with resref: %s", nAreasLoaded + 1,  nAreasToLoad, *resref);
-                }
-
-                return loadModuleInProgressHook->CallOriginal<uint32_t>(pModule, nAreasLoaded, nAreasToLoad);
-            }, Hooks::Order::Earliest);
 
     static Hooks::Hook loadModuleFinishHook = Hooks::HookFunction(
             &CNWSModule::LoadModuleFinish,
@@ -213,38 +170,7 @@ void NWNXCore::InitialSetupHooks()
             {
                 MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_MODULE_LOAD_FINISH" });
                 return loadModuleFinishHook->CallOriginal<uint32_t>(pModule);
-            }, Hooks::Order::Earliest);
-
-    if (!Config::Get<bool>("ALLOW_NWNX_FUNCTIONS_IN_EXECUTE_SCRIPT_CHUNK", false))
-    {
-        static Hooks::Hook runScriptChunkHook = Hooks::HookFunction(
-                &CVirtualMachine::RunScriptChunk,
-                +[](CVirtualMachine *pVirtualMachine, const CExoString& sScriptChunk, ObjectID oid, int32_t bOidValid, int32_t bWrapIntoMain) -> int32_t
-                {
-                    g_core->m_ScriptChunkRecursion += 1;
-                    auto retVal = runScriptChunkHook->CallOriginal<int32_t>(pVirtualMachine, sScriptChunk, oid, bOidValid, bWrapIntoMain);
-                    g_core->m_ScriptChunkRecursion -= 1;
-                    return retVal;
-                }, Hooks::Order::VeryEarly);
-
-        static Hooks::Hook runScriptSituationHook = Hooks::HookFunction(
-                &CVirtualMachine::RunScriptSituation,
-                +[](CVirtualMachine *pVirtualMachine, void * pScriptSituation, OBJECT_ID oid, BOOL bOidValid) -> BOOL
-                {
-                    auto *pVirtualMachineScript = (CVirtualMachineScript*)pScriptSituation;
-                    bool isScriptChunk = !pVirtualMachineScript->m_sScriptChunk.IsEmpty();
-
-                    if (isScriptChunk)
-                        g_core->m_ScriptChunkRecursion += 1;
-
-                    auto retVal = runScriptSituationHook->CallOriginal<BOOL>(pVirtualMachine, pScriptSituation, oid, bOidValid);
-
-                    if (isScriptChunk)
-                        g_core->m_ScriptChunkRecursion -= 1;
-
-                    return retVal;
-                }, Hooks::Order::VeryEarly);
-    }
+            }, Hooks::Order::Earliest); 
 }
 
 void NWNXCore::InitialVersionCheck()
