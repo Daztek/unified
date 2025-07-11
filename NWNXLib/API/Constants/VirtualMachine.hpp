@@ -29,6 +29,30 @@ namespace VMError
     };
 }
 
+namespace VMAuxCodeType
+{
+    enum TYPE
+    {
+        Invalid = 0x0,
+        Void = 0x01,
+        Command = 0x02,
+        Integer = 0x03,
+        Float = 0x04,
+        String = 0x05,
+        Object = 0x06,
+        EngSt0 = 0x10,
+        EngSt1 = 0x11,
+        EngSt2 = 0x12,
+        EngSt3 = 0x13,
+        EngSt4 = 0x14,
+        EngSt5 = 0x15,
+        EngSt6 = 0x16,
+        EngSt7 = 0x17,
+        EngSt8 = 0x18,
+        EngSt9 = 0x19,
+    };
+}
+
 namespace VMStructure
 {
     enum TYPE

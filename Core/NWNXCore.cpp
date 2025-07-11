@@ -108,12 +108,9 @@ void RestoreCrashHandlers()
 
 }
 
-// TODO: Remove and allow auto-init post-load
 namespace NWNXLib::POS { void InitializeHooks(); }
-namespace NWNXLib::Tasks {
-    void StartAsyncWorkers();
-    void StopAsyncWorkers();
-}
+namespace NWNXLib::Tasks { void StartAsyncWorkers(); void StopAsyncWorkers(); }
+namespace NWNXLib::VM { void InitializeHooks(); void Cleanup(); }
 
 namespace Core {
 
@@ -163,6 +160,7 @@ void NWNXCore::InitialSetupHooks()
     m_mainLoopInternalHook          = Hooks::HookFunction(&CServerExoAppInternal::MainLoop, &MainLoopInternalHandler, Hooks::Order::Final);
 
     POS::InitializeHooks();
+    VM::InitializeHooks();
 
     static Hooks::Hook loadModuleFinishHook = Hooks::HookFunction(
             &CNWSModule::LoadModuleFinish,
@@ -508,6 +506,8 @@ void NWNXCore::CreateServerHandler(CAppManager* app)
 void NWNXCore::DestroyServerHandler(CAppManager* app)
 {
     g_CoreShuttingDown = true;
+    MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_DESTROY_SERVER" });
+    VM::Cleanup();
     g_core->m_destroyServerHook.reset();
     app->DestroyServer();
     g_core->Shutdown();

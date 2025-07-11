@@ -35,6 +35,7 @@ add_subdirectory(API)
 add_subdirectory(External)
 add_subdirectory(Platform)
 add_subdirectory(Utils)
+add_subdirectory(VM)
 
 add_library(NWNXLib STATIC "${NWNXLIB_SOURCE}")
 

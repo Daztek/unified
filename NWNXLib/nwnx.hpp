@@ -287,6 +287,16 @@ namespace Tasks
     void ProcessMainThreadWork();
 }
 
+namespace VM
+{
+    uint8_t GetRunScriptReturnValueType();
+    bool GetRunScriptReturnValueInteger(int32_t* pInteger);
+    bool GetRunScriptReturnValueFloat(float* pFloat);
+    bool GetRunScriptReturnValueString(CExoString* pString);
+    bool GetRunScriptReturnValueObject(ObjectID* pObjectID);
+    bool GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst);
+}
+
 }
 
 #include "Assert.hpp"

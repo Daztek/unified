@@ -1,6 +1,7 @@
 #pragma once
 #include "nwn_api.hpp"
 #include "CExoString.hpp"
+#include "CVirtualMachineCmdImplementer.hpp"
 
 
 #ifdef NWN_API_PROLOGUE
@@ -47,7 +48,105 @@ struct StackElement
     StackElement() { std::memset(this, 0, sizeof(*this)); }
     ~StackElement() { if (m_nType == Type::STRING) m_sString.Clear(); }
 
+    inline void Init(uint8_t type)
+    {
+        m_nType = type;
+        switch (m_nType)
+        {
+        case Type::INTEGER:
+            m_nStackInt = 0;
+            break;
+        case Type::FLOAT:
+            m_fStackFloat = 0.0f;
+            break;
+        case Type::OBJECT:
+            m_nStackObjectID = NWNXLib::API::Constants::OBJECT_INVALID;
+            break;
+        case Type::STRING:
+            (void)m_sString.Relinquish();
+            break;
+        case Type::ENGST0:
+        case Type::ENGST1:
+        case Type::ENGST2:
+        case Type::ENGST3:
+        case Type::ENGST4:
+        case Type::ENGST5:
+        case Type::ENGST6:
+        case Type::ENGST7:
+        case Type::ENGST8:
+        case Type::ENGST9:
+            m_pStackPtr = nullptr;
+            break;
+        default:
+            return;
+        }
+    }
 
+    inline void Clear(CVirtualMachineCmdImplementer* vmimpl)
+    {
+        switch (m_nType)
+        {
+        case Type::INTEGER:
+        case Type::FLOAT:
+        case Type::OBJECT:
+            break;
+        case Type::STRING:
+            m_sString.Clear();
+            break;
+        case Type::ENGST0:
+        case Type::ENGST1:
+        case Type::ENGST2:
+        case Type::ENGST3:
+        case Type::ENGST4:
+        case Type::ENGST5:
+        case Type::ENGST6:
+        case Type::ENGST7:
+        case Type::ENGST8:
+        case Type::ENGST9:
+            if (m_pStackPtr)
+            {
+                vmimpl->DestroyGameDefinedStructure(m_nType - Type::ENGST0, m_pStackPtr);
+            }
+            break;
+        default:
+            return;
+        }
+        memset(this, 0, sizeof(*this));
+    }
+
+    inline void CopyFrom(const StackElement& src, CVirtualMachineCmdImplementer* vmimpl)
+    {
+        m_nType = src.m_nType;
+        switch (m_nType)
+        {
+        case Type::STRING:
+            m_sString = src.m_sString;
+            break;
+        case Type::INTEGER:
+            m_nStackInt = src.m_nStackInt;
+            break;
+        case Type::FLOAT:
+            m_fStackFloat = src.m_fStackFloat;
+            break;
+        case Type::OBJECT:
+            m_nStackObjectID = src.m_nStackObjectID;
+            break;
+        case Type::ENGST0:
+        case Type::ENGST1:
+        case Type::ENGST2:
+        case Type::ENGST3:
+        case Type::ENGST4:
+        case Type::ENGST5:
+        case Type::ENGST6:
+        case Type::ENGST7:
+        case Type::ENGST8:
+        case Type::ENGST9:
+            m_pStackPtr = vmimpl->CopyGameDefinedStructure(m_nType - Type::ENGST0, src.m_pStackPtr);
+            break;
+        default:
+            return;
+        }
+    }
 
 #ifdef NWN_CLASS_EXTENSION_StackElement
     NWN_CLASS_EXTENSION_StackElement

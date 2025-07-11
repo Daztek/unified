@@ -1,5 +1,6 @@
 #pragma once
 #include "nwn_api.hpp"
+#include "StackElement.hpp"
 
 
 
@@ -37,6 +38,7 @@ struct CVirtualMachineStack
     inline int32_t GetStackPointer() { return m_nStackPointer; }
     void SetStackPointer(int32_t nSize);
 
+    inline StackElement& GetStackNode(int32_t nIndex) { return m_pStackNodes[nIndex]; }
 
 #ifdef NWN_CLASS_EXTENSION_CVirtualMachineStack
     NWN_CLASS_EXTENSION_CVirtualMachineStack

@@ -233,3 +233,11 @@ struct CNetConnectionId : public DistinctSimpleType<uint32_t>
     void nwnxRemove(const std::string& key, const char *pn = PLUGIN_NAME);                                                  \
     void nwnxRemoveRegex(const std::string& regex, const char *pn = PLUGIN_NAME);                                           \
 
+#define NWN_CLASS_EXTENSION_CVirtualMachine \
+    uint8_t GetRunScriptReturnValueType();                                                                                  \
+    bool GetRunScriptReturnValueInteger(int32_t* pInteger);                                                                 \
+    bool GetRunScriptReturnValueFloat(float* pFloat);                                                                       \
+    bool GetRunScriptReturnValueString(CExoString* pString);                                                                \
+    bool GetRunScriptReturnValueObject(ObjectID* pObjectID);                                                                \
+    bool GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst);                               \
+
