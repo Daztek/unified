@@ -401,44 +401,6 @@ NWNX_EXPORT ArgumentStack RemoveNWNXResourceFile(ArgumentStack&& args)
     return bOk;
 }
 
-NWNX_EXPORT ArgumentStack SetInstructionLimit(ArgumentStack&& args)
-{
-    const static uint32_t defaultInstructionLimit = Globals::VirtualMachine()->m_nInstructionLimit;
-    const auto limit = args.extract<int32_t>();
-
-    if (limit < 0)
-    {
-        // We queue it on the main thread so it'll reset after the current script is done executing
-        Tasks::QueueOnMainThread(
-            [](){ Globals::VirtualMachine()->m_nInstructionLimit = defaultInstructionLimit; });
-    }
-    else
-        Globals::VirtualMachine()->m_nInstructionLimit = limit;
-
-    return {};
-}
-
-NWNX_EXPORT ArgumentStack GetInstructionLimit(ArgumentStack&&)
-{
-    int32_t retVal = Globals::VirtualMachine()->m_nInstructionLimit;
-    return retVal;
-}
-
-NWNX_EXPORT ArgumentStack SetInstructionsExecuted(ArgumentStack&& args)
-{
-    const auto instructions = args.extract<int32_t>();
-
-    Globals::VirtualMachine()->m_nInstructionsExecuted = instructions >= 0 ? instructions : 0;
-
-    return {};
-}
-
-NWNX_EXPORT ArgumentStack GetInstructionsExecuted(ArgumentStack&&)
-{
-    int32_t retVal = Globals::VirtualMachine()->m_nInstructionsExecuted;
-    return retVal;
-}
-
 NWNX_EXPORT ArgumentStack GetScriptReturnValue(ArgumentStack&&)
 {
     int32_t retVal = 0;
@@ -646,31 +608,6 @@ NWNX_EXPORT ArgumentStack GetResourceOverride(ArgumentStack&& args)
     std::string overrideResName = Globals::ExoResMan()->GetOverride(resName.c_str(), resType).GetResRefStr();
 
     return overrideResName == resName ? "" : overrideResName;
-}
-
-NWNX_EXPORT ArgumentStack GetScriptParamIsSet(ArgumentStack&& args)
-{
-    int32_t retVal = false;
-
-    const auto paramName = args.extract<std::string>();
-      ASSERT_OR_THROW(!paramName.empty());
-
-    auto *pVirtualMachine = API::Globals::VirtualMachine();
-    if (pVirtualMachine && pVirtualMachine->m_nRecursionLevel >= 0)
-    {
-        auto &scriptParams = pVirtualMachine->m_lScriptParams[pVirtualMachine->m_nRecursionLevel];
-
-        for (const auto& scriptParam : scriptParams)
-        {
-            if (scriptParam.key.CStr() == paramName)
-            {
-                retVal = true;
-                break;
-            }
-        }
-    }
-
-    return retVal;
 }
 
 NWNX_EXPORT ArgumentStack SetDawnHour(ArgumentStack &&args)

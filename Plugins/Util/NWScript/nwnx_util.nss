@@ -148,20 +148,6 @@ int NWNX_Util_AddNSSFile(string sFileName, string sContents, string sAlias = "NW
 /// @return TRUE on success.
 int NWNX_Util_RemoveNWNXResourceFile(string sFileName, int nType, string sAlias = "NWNX");
 
-/// @brief Set the NWScript instruction limit.
-/// @param nInstructionLimit The new limit or -1 to reset to default.
-void NWNX_Util_SetInstructionLimit(int nInstructionLimit);
-
-/// @brief Get the NWScript instruction limit.
-int NWNX_Util_GetInstructionLimit();
-
-/// @brief Set the number of NWScript instructions currently executed.
-/// @param nInstructions The number of instructions, must be >= 0.
-void NWNX_Util_SetInstructionsExecuted(int nInstructions);
-
-/// @brief Get the number of NWScript instructions currently executed.
-int NWNX_Util_GetInstructionsExecuted();
-
 /// @brief Register a server console command that will execute a script chunk.
 /// @note Example usage: NWNX_Util_RegisterServerConsoleCommand("test", "PrintString(\"Test Command -> Args: $args\");");
 /// @param sCommand The name of the command.
@@ -211,11 +197,6 @@ void NWNX_Util_SetResourceOverride(int nResType, string sOldName, string sNewNam
 /// @param sName The name of the resource, 16 characters or less.
 /// @return The resource override, or "" if one is not set.
 string NWNX_Util_GetResourceOverride(int nResType, string sName);
-
-/// @brief Get if a script param is set.
-/// @param sParamName The script parameter name to check.
-/// @return TRUE if the script param is set, FALSE if not or on error.
-int NWNX_Util_GetScriptParamIsSet(string sParamName);
 
 /// @brief Set the module dawn hour.
 /// @param nDawnHour The new dawn hour
@@ -408,30 +389,6 @@ int NWNX_Util_RemoveNWNXResourceFile(string sFileName, int nType, string sAlias 
     return NWNXPopInt();
 }
 
-void NWNX_Util_SetInstructionLimit(int nInstructionLimit)
-{
-    NWNXPushInt(nInstructionLimit);
-    NWNXCall(NWNX_Util, "SetInstructionLimit");
-}
-
-int NWNX_Util_GetInstructionLimit()
-{
-    NWNXCall(NWNX_Util, "GetInstructionLimit");
-    return NWNXPopInt();
-}
-
-void NWNX_Util_SetInstructionsExecuted(int nInstructions)
-{
-    NWNXPushInt(nInstructions);
-    NWNXCall(NWNX_Util, "SetInstructionsExecuted");
-}
-
-int NWNX_Util_GetInstructionsExecuted()
-{
-    NWNXCall(NWNX_Util, "GetInstructionsExecuted");
-    return NWNXPopInt();
-}
-
 int NWNX_Util_RegisterServerConsoleCommand(string sCommand, string sScriptChunk)
 {
     NWNXPushString(sScriptChunk);
@@ -498,13 +455,6 @@ string NWNX_Util_GetResourceOverride(int nResType, string sName)
     NWNXPushInt(nResType);
     NWNXCall(NWNX_Util, "GetResourceOverride");
     return NWNXPopString();
-}
-
-int NWNX_Util_GetScriptParamIsSet(string sParamName)
-{
-    NWNXPushString(sParamName);
-    NWNXCall(NWNX_Util, "GetScriptParamIsSet");
-    return NWNXPopInt();
 }
 
 void NWNX_Util_SetDawnHour(int nDawnHour)

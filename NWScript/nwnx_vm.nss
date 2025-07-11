@@ -27,6 +27,22 @@ object NWNX_VM_GetScriptReturnValueObject();
 // Get the returned json value of the last script executed with ExecuteScript() or ExecuteScriptChunk() or JsonNull() on error.
 json NWNX_VM_GetScriptReturnValueJson();
 
+// Get the NWScript VM instruction limit.
+int NWNX_VM_GetInstructionLimit();
+
+// Set the NWScript VM instruction limit.
+// - nInstructionLimit The new limit or -1 to reset to default.
+void NWNX_VM_SetInstructionLimit(int nInstructionLimit);
+
+// Set the number of NWScript VM instructions currently executed.
+// - nInstructions: The number of instructions, must be >= 0.
+void NWNX_VM_SetInstructionsExecuted(int nInstructions);
+
+// Check if a script param is set.
+// - sParamName: The script parameter name to check.
+// * Returns TRUE if the script param is set, FALSE if not or on error.
+int NWNX_VM_GetScriptParamSet(string sParamName);
+
 int NWNX_VM_GetScriptReturnValueType()
 {
     NWNXCall(NWNX_VM, "GetScriptReturnValueType");
@@ -61,4 +77,29 @@ json NWNX_VM_GetScriptReturnValueJson()
 {
     NWNXCall(NWNX_VM, "GetScriptReturnValueJson");
     return NWNXPopJson();
+}
+
+int NWNX_VM_GetInstructionLimit()
+{
+    NWNXCall(NWNX_VM, "GetInstructionLimit");
+    return NWNXPopInt();
+}
+
+void NWNX_VM_SetInstructionLimit(int nInstructionLimit)
+{
+    NWNXPushInt(nInstructionLimit);
+    NWNXCall(NWNX_VM, "SetInstructionLimit");
+}
+
+void NWNX_VM_SetInstructionsExecuted(int nInstructions)
+{
+    NWNXPushInt(nInstructions);
+    NWNXCall(NWNX_VM, "SetInstructionsExecuted");
+}
+
+int NWNX_VM_GetScriptParamSet(string sParamName)
+{
+    NWNXPushString(sParamName);
+    NWNXCall(NWNX_VM, "GetScriptParamSet");
+    return NWNXPopInt();
 }

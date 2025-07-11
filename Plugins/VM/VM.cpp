@@ -64,3 +64,50 @@ NWNX_EXPORT ArgumentStack GetScriptReturnValueJson(ArgumentStack&&)
     JsonEngineStructure jRet;
     return jRet;
 }
+
+NWNX_EXPORT ArgumentStack GetInstructionLimit(ArgumentStack&&)
+{
+    return (int32_t)Globals::VirtualMachine()->m_nInstructionLimit;
+}
+
+NWNX_EXPORT ArgumentStack SetInstructionLimit(ArgumentStack&& args)
+{
+    const static uint32_t defaultInstructionLimit = Globals::VirtualMachine()->m_nInstructionLimit;
+    const auto limit = args.extract<int32_t>();
+
+    if (limit < 0)
+        Tasks::QueueOnMainThread([]() { Globals::VirtualMachine()->m_nInstructionLimit = defaultInstructionLimit; });
+    else
+        Globals::VirtualMachine()->m_nInstructionLimit = limit;
+
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack SetInstructionsExecuted(ArgumentStack&& args)
+{
+    const auto instructions = args.extract<int32_t>();
+    Globals::VirtualMachine()->m_nInstructionsExecuted = instructions >= 0 ? instructions : 0;
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetScriptParamSet(ArgumentStack&& args)
+{
+    int32_t retVal = false;
+    const auto paramName = args.extract<std::string>();
+    ASSERT_OR_THROW(!paramName.empty());
+
+    if (Globals::VirtualMachine()->m_nRecursionLevel >= 0)
+    {
+        auto& scriptParams = Globals::VirtualMachine()->m_lScriptParams[Globals::VirtualMachine()->m_nRecursionLevel];
+        for (const auto& scriptParam : scriptParams)
+        {
+            if (scriptParam.key.CStr() == paramName)
+            {
+                retVal = true;
+                break;
+            }
+        }
+    }
+
+    return retVal;
+}
