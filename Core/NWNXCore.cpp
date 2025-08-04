@@ -110,7 +110,7 @@ void RestoreCrashHandlers()
 
 namespace NWNXLib::POS { void InitializeHooks(); }
 namespace NWNXLib::Tasks { void StartAsyncWorkers(); void StopAsyncWorkers(); }
-namespace NWNXLib::VM { void InitializeHooks(); void Cleanup(); }
+namespace NWNXLib::VM::ReturnTypeExtension { void InitializeHooks(); void Cleanup(); }
 
 namespace Core {
 
@@ -160,7 +160,7 @@ void NWNXCore::InitialSetupHooks()
     m_mainLoopInternalHook          = Hooks::HookFunction(&CServerExoAppInternal::MainLoop, &MainLoopInternalHandler, Hooks::Order::Final);
 
     POS::InitializeHooks();
-    VM::InitializeHooks();
+    VM::ReturnTypeExtension::InitializeHooks();
 
     static Hooks::Hook loadModuleFinishHook = Hooks::HookFunction(
             &CNWSModule::LoadModuleFinish,
@@ -507,7 +507,7 @@ void NWNXCore::DestroyServerHandler(CAppManager* app)
 {
     g_CoreShuttingDown = true;
     MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_DESTROY_SERVER" });
-    VM::Cleanup();
+    VM::ReturnTypeExtension::Cleanup();
     g_core->m_destroyServerHook.reset();
     app->DestroyServer();
     g_core->Shutdown();

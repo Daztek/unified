@@ -287,7 +287,7 @@ namespace Tasks
     void ProcessMainThreadWork();
 }
 
-namespace VM
+namespace VM::ReturnTypeExtension
 {
     uint8_t GetRunScriptReturnValueType();
     bool GetRunScriptReturnValueInteger(int32_t* pInteger);

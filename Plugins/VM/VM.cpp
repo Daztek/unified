@@ -59,10 +59,9 @@ NWNX_EXPORT ArgumentStack GetScriptReturnValueJson(ArgumentStack&&)
     {
         void* pValue;
         if (Globals::VirtualMachine()->GetRunScriptReturnValueEngineStructure(Constants::VMAuxCodeType::EngSt7, &pValue))
-            return *(JsonEngineStructure*)pValue;
+            return *static_cast<JsonEngineStructure*>(pValue);
     }
-    JsonEngineStructure jRet;
-    return jRet;
+    return JsonEngineStructure{};
 }
 
 NWNX_EXPORT ArgumentStack GetInstructionLimit(ArgumentStack&&)

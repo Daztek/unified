@@ -10,7 +10,8 @@
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
-namespace NWNXLib::VM
+
+namespace NWNXLib::VM::ReturnTypeExtension
 {
     constexpr int32_t MAX_RECURSION_LEVELS = 8;
     static StackElement s_cRunScriptReturnValue[MAX_RECURSION_LEVELS];
@@ -465,9 +466,9 @@ namespace NWNXLib::VM
 
     void Cleanup()
     {
-        for (int32_t nCount = 0; nCount < MAX_RECURSION_LEVELS; nCount++)
+        for (auto &stackElement : s_cRunScriptReturnValue)
         {
-            s_cRunScriptReturnValue[nCount].Clear(Globals::VirtualMachine()->m_pCmdImplementer);
+            stackElement.Clear(Globals::VirtualMachine()->m_pCmdImplementer);
         }
     }
 
@@ -544,30 +545,30 @@ namespace NWNXLib::VM
 
 uint8_t CVirtualMachine::GetRunScriptReturnValueType()
 {
-    return VM::GetRunScriptReturnValueType();
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueType();
 }
 
 bool CVirtualMachine::GetRunScriptReturnValueInteger(int32_t* pInteger)
 {
-    return VM::GetRunScriptReturnValueInteger(pInteger);
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueInteger(pInteger);
 }
 
 bool CVirtualMachine::GetRunScriptReturnValueFloat(float* pFloat)
 {
-    return VM::GetRunScriptReturnValueFloat(pFloat);
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueFloat(pFloat);
 }
 
 bool CVirtualMachine::GetRunScriptReturnValueString(CExoString* pString)
 {
-    return VM::GetRunScriptReturnValueString(pString);
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueString(pString);
 }
 
 bool CVirtualMachine::GetRunScriptReturnValueObject(ObjectID* pObjectID)
 {
-    return VM::GetRunScriptReturnValueObject(pObjectID);
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueObject(pObjectID);
 }
 
 bool CVirtualMachine::GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst)
 {
-    return VM::GetRunScriptReturnValueEngineStructure(nEngineStructureType, pEngst);
+    return VM::ReturnTypeExtension::GetRunScriptReturnValueEngineStructure(nEngineStructureType, pEngst);
 }
