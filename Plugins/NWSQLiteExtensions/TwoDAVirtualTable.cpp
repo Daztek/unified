@@ -334,6 +334,7 @@ static int Setup2DAVirtualTableModule(sqlite3 *db)
         nullptr,
         nullptr,
         nullptr,
+        nullptr,
         nullptr
     };
 
