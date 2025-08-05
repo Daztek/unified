@@ -25,7 +25,7 @@ struct CustomFunction
     bool deterministic;
 };
 
-using ArgValue = std::variant<int32_t, double, std::string, ObjectID>;
+using ArgValue = std::variant<int32_t, double, std::string>;
 struct CacheKey
 {
     int32_t functionHash;
@@ -142,10 +142,6 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
                 {
                     sqlite3_result_text(context, val.c_str(), -1, SQLITE_TRANSIENT);
                 }
-                else if constexpr (std::is_same_v<T, ObjectID>)
-                {
-                    sqlite3_result_int(context, val);
-                }
             }, it->second);
 
             return;
@@ -241,8 +237,9 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
         ObjectID retVal;
         if (pVM->GetRunScriptReturnValueObject(&retVal))
         {
-            storeInCache(retVal);
-            sqlite3_result_int(context, retVal);
+            const auto retObj = static_cast<int32_t>(retVal);
+            storeInCache(retObj);
+            sqlite3_result_int(context, retObj);
             return;
         }
 
@@ -256,29 +253,35 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
 NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
 {
     const auto name = args.extract<std::string>();
+        ASSERT_OR_THROW(!name.empty());
     const auto scriptChunk = args.extract<std::string>();
+        ASSERT_OR_THROW(!scriptChunk.empty());
     const auto argCount = args.extract<int32_t>();
-    const auto returnType = static_cast<ReturnType>(args.extract<int32_t>());
+        ASSERT_OR_THROW(argCount >= 0);
+    auto returnType = args.extract<int32_t>();
+        ASSERT_OR_THROW(returnType >= ReturnType::Int);
+        ASSERT_OR_THROW(returnType <= ReturnType::Object);
     const bool deterministic = !!args.extract<int32_t>();
+
+    if (const auto it = s_customFunctions.find(name); it != s_customFunctions.end())
+        return 0;
 
     CustomFunction function;
     function.scriptChunk = scriptChunk;
     function.functionHash = CExoString(scriptChunk).GetHash();
     function.argCount = argCount;
-    function.returnType = returnType;
+    function.returnType = static_cast<ReturnType>(returnType);
     function.deterministic = deterministic;
-
     s_customFunctions[name] = function;
 
     int flags = SQLITE_UTF8 | SQLITE_DIRECTONLY;
     if (function.deterministic)
         flags |= SQLITE_DETERMINISTIC;
 
-    auto *pModule = Utils::GetModule();
     int rc = sqlite3_create_function_v2(
-        pModule->m_sqlite3->connection().get(),
+        Utils::GetModule()->m_sqlite3->connection().get(),
         name.c_str(),
-        argCount + 1,
+        1 + argCount,
         flags,
         &s_customFunctions[name],
         CustomFunctionCallback,
