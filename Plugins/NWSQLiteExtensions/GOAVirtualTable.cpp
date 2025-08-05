@@ -50,8 +50,12 @@ struct goa_cursor
 {
     sqlite3_vtab_cursor base;
     ObjectID currentObjectId;
-    uint32_t objectTypeFilter;
-    ObjectID areaIdFilter;
+    uint32_t objectTypeEQFilter;
+    ObjectID areaIdEQFilter;
+    char tagEQFilter[65];
+    bool tagEQFilterActive;
+    char tagLikeFilter[65];
+    bool tagLikeFilterActive;
 };
 
 namespace GOAColumns
@@ -93,6 +97,15 @@ namespace GOAColumns
         return sSchema;
     }
 }
+
+enum FilterFlags : int
+{
+    None = 0,
+    ObjectTypeEQ = 1,
+    AreaIdEQ = 2,
+    TagEQ = 4,
+    TagLike = 8
+};
 
 static int goaConnect(sqlite3 *db, void *pAux, int argc, const char* const *argv, sqlite3_vtab **ppVtab, char **pzErr)
 {
@@ -147,20 +160,48 @@ static bool goaObjectPassesFilters(goa_cursor *pCursor, CGameObject *pGameObject
     if (!pGameObject)
         return false;
 
-     if (pCursor->objectTypeFilter && pGameObject->m_nObjectType != pCursor->objectTypeFilter)
+     if (pCursor->objectTypeEQFilter && pGameObject->m_nObjectType != pCursor->objectTypeEQFilter)
         return false;
 
-    if (pCursor->areaIdFilter)
+    if (pCursor->areaIdEQFilter)
     {
         if (auto *pObject = Utils::AsNWSObject(pGameObject))
         {
-            if (pObject->m_oidArea != pCursor->areaIdFilter)
+            if (pObject->m_oidArea != pCursor->areaIdEQFilter)
                 return false;
         }
         else
         {
             return false;
         }
+    }
+
+    if (pCursor->tagEQFilterActive)
+    {
+        const char* tag = nullptr;
+        if (auto *pObject = Utils::AsNWSObject(pGameObject))
+            tag = pObject->m_sTag.CStr();
+        else if (auto *pArea = Utils::AsNWSArea(pGameObject))
+            tag = pArea->m_sTag.CStr();
+        else if (auto *pModule = Utils::AsNWSModule(pGameObject))
+            tag = pModule->m_sTag.CStr();
+
+        if (!tag || strcmp(tag, pCursor->tagEQFilter) != 0)
+            return false;
+    }
+
+    if (pCursor->tagLikeFilterActive)
+    {
+        const char* tag = nullptr;
+        if (auto *pObject = Utils::AsNWSObject(pGameObject))
+            tag = pObject->m_sTag.CStr();
+        else if (auto *pArea = Utils::AsNWSArea(pGameObject))
+            tag = pArea->m_sTag.CStr();
+        else if (auto *pModule = Utils::AsNWSModule(pGameObject))
+            tag = pModule->m_sTag.CStr();
+
+        if (!tag || sqlite3_strlike(pCursor->tagLikeFilter, tag, 0) != 0)
+            return false;
     }
 
     return true;
@@ -278,28 +319,57 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
     auto *pCursor = reinterpret_cast<goa_cursor*>(cur);
 
     pCursor->currentObjectId = 0;
-    pCursor->objectTypeFilter = 0;
-    pCursor->areaIdFilter = 0;
+    pCursor->objectTypeEQFilter = 0;
+    pCursor->areaIdEQFilter = 0;
+    pCursor->tagEQFilterActive = false;
+    pCursor->tagEQFilter[0] = '\0';
+    pCursor->tagLikeFilterActive = false;
+    pCursor->tagLikeFilter[0] = '\0';
 
     int argIndex = 0;
-    if (idxNum & 1) // ObjectType filter
+    if (idxNum & FilterFlags::ObjectTypeEQ)
     {
         if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_INTEGER)
         {
             int32_t objectType = sqlite3_value_int(argv[argIndex]);
-            pCursor->objectTypeFilter = objectType;
+            pCursor->objectTypeEQFilter = objectType;
         }
         argIndex++;
     }
 
-    if (idxNum & 2) // AreaId filter
+    if (idxNum & FilterFlags::AreaIdEQ)
     {
         if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_INTEGER)
         {
             ObjectID areaId = sqlite3_value_int(argv[argIndex]);
-            pCursor->areaIdFilter = areaId;
+            pCursor->areaIdEQFilter = areaId;
         }
         argIndex++;
+    }
+
+    if (idxNum & FilterFlags::TagEQ)
+    {
+        if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_TEXT)
+        {
+            if (auto *tag = reinterpret_cast<const char*>(sqlite3_value_text(argv[argIndex])))
+            {
+                sqlite3_snprintf(sizeof(pCursor->tagEQFilter), pCursor->tagEQFilter, "%s", tag);
+                pCursor->tagEQFilterActive = true;
+            }
+        }
+        argIndex++;
+    }
+
+    if (idxNum & FilterFlags::TagLike)
+    {
+        if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_TEXT)
+        {
+            if (auto *likePattern = reinterpret_cast<const char*>(sqlite3_value_text(argv[argIndex])))
+            {
+                sqlite3_snprintf(sizeof(pCursor->tagLikeFilter), pCursor->tagLikeFilter, "%s", likePattern);
+                pCursor->tagLikeFilterActive = true;
+            }
+        }
     }
 
     if (!goaObjectPassesFilters(pCursor, Utils::GetGameObject(pCursor->currentObjectId)))
@@ -312,49 +382,76 @@ static int goaBestIndex(sqlite3_vtab*, sqlite3_index_info *pIndexInfo)
 {
     int objectTypeEQIndex = -1;
     int areaIdEQIndex = -1;
+    int tagEQIndex = -1;
+    int tagLikeIndex = -1;
 
     for (int i = 0; i < pIndexInfo->nConstraint; i++)
     {
-        auto constraint = pIndexInfo->aConstraint[i];
+        const auto constraint = pIndexInfo->aConstraint[i];
 
-        if (!constraint.usable || constraint.op != SQLITE_INDEX_CONSTRAINT_EQ)
+        if (!constraint.usable)
             continue;
 
-        if (constraint.iColumn == GOAColumns::ObjectType)
+        if (constraint.op == SQLITE_INDEX_CONSTRAINT_EQ)
         {
-            objectTypeEQIndex = i;
+            if (constraint.iColumn == GOAColumns::ObjectType)
+                objectTypeEQIndex = i;
+            else if (constraint.iColumn == GOAColumns::AreaId)
+                areaIdEQIndex = i;
+            else if (constraint.iColumn == GOAColumns::Tag)
+                tagEQIndex = i;
         }
-        else if (constraint.iColumn == GOAColumns::AreaId)
+        else if (constraint.op == SQLITE_INDEX_CONSTRAINT_LIKE)
         {
-            areaIdEQIndex = i;
+            if (constraint.iColumn == GOAColumns::Tag)
+                tagLikeIndex = i;
         }
     }
 
-    int idxNum = 0;
+    int idxNum = FilterFlags::None;
     int argvIndex = 1;
 
     if (objectTypeEQIndex != -1)
     {
-        idxNum |= 1;
+        idxNum |= FilterFlags::ObjectTypeEQ;
         pIndexInfo->aConstraintUsage[objectTypeEQIndex].argvIndex = argvIndex++;
         pIndexInfo->aConstraintUsage[objectTypeEQIndex].omit = 1;
     }
 
     if (areaIdEQIndex != -1)
     {
-        idxNum |= 2;
+        idxNum |= FilterFlags::AreaIdEQ;
         pIndexInfo->aConstraintUsage[areaIdEQIndex].argvIndex = argvIndex++;
         pIndexInfo->aConstraintUsage[areaIdEQIndex].omit = 1;
     }
 
+    if (tagEQIndex != -1)
+    {
+        idxNum |= FilterFlags::TagEQ;
+        pIndexInfo->aConstraintUsage[tagEQIndex].argvIndex = argvIndex++;
+        pIndexInfo->aConstraintUsage[tagEQIndex].omit = 1;
+    }
+
+    if (tagLikeIndex != -1)
+    {
+        idxNum |= FilterFlags::TagLike;
+        pIndexInfo->aConstraintUsage[tagLikeIndex].argvIndex = argvIndex++;
+        pIndexInfo->aConstraintUsage[tagLikeIndex].omit = 1;
+    }
+
     pIndexInfo->idxNum = idxNum;
 
-    if (idxNum == 3)
-        pIndexInfo->estimatedCost = 100.0;
-    else if (idxNum > 0)
-        pIndexInfo->estimatedCost = 1000.0;
+    double baseCost = 10000.0;
+    int filters = 0;
+    if (idxNum & FilterFlags::ObjectTypeEQ) filters++;
+    if (idxNum & FilterFlags::AreaIdEQ) filters++;
+    if (idxNum & FilterFlags::TagEQ) filters++;
+    if (idxNum & FilterFlags::TagLike) filters++;
+
+    if (filters > FilterFlags::None)
+        pIndexInfo->estimatedCost = baseCost / (filters * 10.0);
     else
-        pIndexInfo->estimatedCost = 10000.0;
+        pIndexInfo->estimatedCost = baseCost;
 
     return SQLITE_OK;
 }
