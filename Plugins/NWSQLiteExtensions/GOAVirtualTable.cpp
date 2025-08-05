@@ -302,13 +302,14 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
         argIndex++;
     }
 
+    if (!goaObjectPassesFilters(pCursor, Utils::GetGameObject(pCursor->currentObjectId)))
+        goaNext(cur);
+
     return SQLITE_OK;
 }
 
 static int goaBestIndex(sqlite3_vtab*, sqlite3_index_info *pIndexInfo)
 {
-    LOG_DEBUG("Constraints: %i", pIndexInfo->nConstraint);
-
     int objectTypeEQIndex = -1;
     int areaIdEQIndex = -1;
 
