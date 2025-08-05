@@ -1,15 +1,13 @@
-@page nwsqliteextensions Readme
-@ingroup nwsqliteextensions
-
 Various extensions for the game's built-in sqlite database.
 
 ## Environment Variables
 
-| Variable Name                                                 |   Value    | Notes                                                                            |
-|---------------------------------------------------------------|:----------:|----------------------------------------------------------------------------------|
-| `NWNX_NWSQLITEEXTENSIONS_ENABLE_DATABASE_ON_ALL_OBJECT_TYPES` | true/false | Allows SqlPrepareQueryObject() to work on all object types except areas.         |
-| `NWNX_NWSQLITEEXTENSIONS_ENABLE_MERSENNE_TWISTER_FUNCTIONS`   | true/false | Enables Mersenne Twister SQLite functions. See below for more information.       |
-| `NWNX_NWSQLITEEXTENSIONS_ENABLE_2DA_VIRTUAL_TABLE_MODULE`     | true/false | Enable the 2DA Virtual Table Module. See below for more information.             |
+| Variable Name                                                 |   Value    | Notes                                                                              |
+|---------------------------------------------------------------|:----------:|------------------------------------------------------------------------------------|
+| `NWNX_NWSQLITEEXTENSIONS_ENABLE_DATABASE_ON_ALL_OBJECT_TYPES` | true/false | Allows SqlPrepareQueryObject() to work on all object types except areas.           |
+| `NWNX_NWSQLITEEXTENSIONS_ENABLE_MERSENNE_TWISTER_FUNCTIONS`   | true/false | Enables Mersenne Twister SQLite functions. See below for more information.         |
+| `NWNX_NWSQLITEEXTENSIONS_ENABLE_2DA_VIRTUAL_TABLE_MODULE`     | true/false | Enable the 2DA Virtual Table Module. See below for more information.               |
+| `NWNX_NWSQLITEEXTENSIONS_ENABLE_GOA_VIRTUAL_TABLE_MODULE`     | true/false | Enable the Gameobject Array Virtual Table Module. See below for more information.  |
 
 ## Mersenne Twister SQLite functions
 
@@ -109,3 +107,16 @@ void main()
 ```
 
 The above will list the labels of all effect icons if their label is not null (meaning not **** in the 2da) and if their `StrRef` is between 8030 and 8035 inclusive.
+
+## GOA Virtual Table Module
+
+A SQLite virtual table that allows you to query the gameobject array.
+
+Available Columns:
+
+| Column Name | SQLite Type | NWScript Type | Comment                   |
+|-------------|-------------|---------------|---------------------------|
+| oid         | INTEGER     | object        | The object ID.            |
+| type        | INTEGER     | int           | The internal object type. |
+| areaid      | INTEGER     | object        | The area object ID.       |
+| tag         | TEXT        | string        | The tag of the object.    |

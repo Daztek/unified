@@ -7,7 +7,6 @@
 #include "API/CNWSObject.hpp"
 #include "API/CNWSArea.hpp"
 #include "API/CNWSModule.hpp"
-#include "API/CNWSUUID.hpp"
 
 
 using namespace NWNXLib;
@@ -38,16 +37,6 @@ void GOAVirtualTable()
             }
         }, Hooks::Order::Early);
     }
-
-    Commands::Register("goa", [](std::string&, std::string&)
-    {
-        auto moduleDatabase = Utils::GetModule()->m_sqlite3;
-        *moduleDatabase << "SELECT oid, type, tag FROM gameobjects WHERE type > 4;" >>
-        [](uint32_t oid, int32_t type, const std::string &tag)
-        {
-            LOG_DEBUG("OID: %i - TYPE: %s - TAG: %s", oid, Constants::ObjectType::ToString(type), tag);
-        };
-    });
 }
 
 typedef struct goa_tab goa_tab;
@@ -62,6 +51,7 @@ struct goa_cursor
     sqlite3_vtab_cursor base;
     ObjectID currentObjectId;
     uint32_t objectTypeFilter;
+    ObjectID areaIdFilter;
 };
 
 namespace GOAColumns
@@ -71,16 +61,12 @@ namespace GOAColumns
         ObjectId = 0,
         ObjectType,
         AreaId,
-        PositionX,
-        PositionY,
-        PositionZ,
         Tag,
-        UUID,
         Num, // Keep Last
     };
-    constexpr int32_t MAX   = 7;
+    constexpr int32_t MAX   = 3;
     constexpr int32_t NUM   = MAX + 1;
-    static_assert(MAX == UUID);
+    static_assert(MAX == Tag);
     static_assert(NUM == Num);
 
     constexpr const char* ToColumnWithType(const unsigned value)
@@ -89,12 +75,8 @@ namespace GOAColumns
         {
             "oid INTEGER",
             "type INTEGER",
-            "oid_area INTEGER",
-            "pos_x REAL",
-            "pos_y REAL",
-            "pos_z REAL",
+            "areaid INTEGER",
             "tag TEXT",
-            "uuid TEXT",
         };
         static_assert(std::size(TYPE_STRINGS) == NUM);
         return (value > MAX) ? "(invalid)" : TYPE_STRINGS[value];
@@ -160,6 +142,30 @@ static int goaClose(sqlite3_vtab_cursor *cur)
     return SQLITE_OK;
 }
 
+static bool goaObjectPassesFilters(goa_cursor *pCursor, CGameObject *pGameObject)
+{
+    if (!pGameObject)
+        return false;
+
+     if (pCursor->objectTypeFilter && pGameObject->m_nObjectType != pCursor->objectTypeFilter)
+        return false;
+
+    if (pCursor->areaIdFilter)
+    {
+        if (auto *pObject = Utils::AsNWSObject(pGameObject))
+        {
+            if (pObject->m_oidArea != pCursor->areaIdFilter)
+                return false;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static int goaNext(sqlite3_vtab_cursor *cur)
 {
     auto *pCursor = reinterpret_cast<goa_cursor*>(cur);
@@ -172,8 +178,7 @@ static int goaNext(sqlite3_vtab_cursor *cur)
         {
             pGameObject = Utils::GetGameObject(++pCursor->currentObjectId);
         }
-        while ((!pGameObject || (pCursor->objectTypeFilter && pGameObject->m_nObjectType != pCursor->objectTypeFilter)) &&
-                pCursor->currentObjectId < pGOA->m_nNextObjectArrayID[0]);
+        while (!goaObjectPassesFilters(pCursor, pGameObject) && pCursor->currentObjectId < pGOA->m_nNextObjectArrayID[0]);
 
         if (pCursor->currentObjectId == pGOA->m_nNextObjectArrayID[0])
         {
@@ -184,8 +189,7 @@ static int goaNext(sqlite3_vtab_cursor *cur)
                 {
                     pGameObject = Utils::GetGameObject(--pCursor->currentObjectId);
                 }
-                while ((!pGameObject || (pCursor->objectTypeFilter && pGameObject->m_nObjectType != pCursor->objectTypeFilter)) &&
-                       pCursor->currentObjectId > pGOA->m_nNextCharArrayID[0]);
+                while (!goaObjectPassesFilters(pCursor, pGameObject) && pCursor->currentObjectId > pGOA->m_nNextCharArrayID[0]);
             }
         }
     }
@@ -195,8 +199,7 @@ static int goaNext(sqlite3_vtab_cursor *cur)
         {
             pGameObject = Utils::GetGameObject(--pCursor->currentObjectId);
         }
-        while ((!pGameObject || (pCursor->objectTypeFilter && pGameObject->m_nObjectType != pCursor->objectTypeFilter)) &&
-                pCursor->currentObjectId > pGOA->m_nNextCharArrayID[0]);
+        while (!goaObjectPassesFilters(pCursor, pGameObject) && pCursor->currentObjectId > pGOA->m_nNextCharArrayID[0]);
     }
 
     return SQLITE_OK;
@@ -225,27 +228,8 @@ static int goaColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
             {
                 if (auto *pObject = Utils::AsNWSObject(pGameObject))
                     sqlite3_result_int(ctx, pObject->m_oidArea);
-            }
-            break;
-
-            case GOAColumns::PositionX:
-            {
-                if (auto *pObject = Utils::AsNWSObject(pGameObject))
-                    sqlite3_result_double(ctx, pObject->m_vPosition.x);
-            }
-            break;
-
-            case GOAColumns::PositionY:
-            {
-                if (auto *pObject = Utils::AsNWSObject(pGameObject))
-                    sqlite3_result_double(ctx, pObject->m_vPosition.y);
-            }
-            break;
-
-            case GOAColumns::PositionZ:
-            {
-                if (auto *pObject = Utils::AsNWSObject(pGameObject))
-                    sqlite3_result_double(ctx, pObject->m_vPosition.z);
+                else
+                    sqlite3_result_int(ctx, Constants::OBJECT_INVALID);
             }
             break;
 
@@ -257,15 +241,6 @@ static int goaColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
                     sqlite3_result_text(ctx, pArea->m_sTag.CStr(), -1, SQLITE_TRANSIENT);
                 else if (auto *pModule = Utils::AsNWSModule(pGameObject))
                     sqlite3_result_text(ctx, pModule->m_sTag.CStr(), -1, SQLITE_TRANSIENT);
-            }
-            break;
-
-            case GOAColumns::UUID:
-            {
-                if (auto *pObject = Utils::AsNWSObject(pGameObject))
-                    sqlite3_result_text(ctx, pObject->m_pUUID.m_uuid.CStr(), -1, SQLITE_TRANSIENT);
-                else if (auto *pArea = Utils::AsNWSArea(pGameObject))
-                    sqlite3_result_text(ctx, pArea->m_pUUID.m_uuid.CStr(), -1, SQLITE_TRANSIENT);
             }
             break;
 
@@ -304,22 +279,27 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
 
     pCursor->currentObjectId = 0;
     pCursor->objectTypeFilter = 0;
+    pCursor->areaIdFilter = 0;
 
-    if (idxNum == 1)
+    int argIndex = 0;
+    if (idxNum & 1) // ObjectType filter
     {
-        if (argc == 1)
+        if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_INTEGER)
         {
-            if (sqlite3_value_type(argv[0]) == SQLITE_INTEGER)
-            {
-                int32_t objectType = sqlite3_value_int(argv[0]);
-                LOG_DEBUG("ObjectFilter Constraint -> EQ = %i", objectType);
-                pCursor->objectTypeFilter = objectType;
-            }
+            int32_t objectType = sqlite3_value_int(argv[argIndex]);
+            pCursor->objectTypeFilter = objectType;
         }
-        else
+        argIndex++;
+    }
+
+    if (idxNum & 2) // AreaId filter
+    {
+        if (argIndex < argc && sqlite3_value_type(argv[argIndex]) == SQLITE_INTEGER)
         {
-            LOG_DEBUG("Multiple Object Filter Constraints?");
+            ObjectID areaId = sqlite3_value_int(argv[argIndex]);
+            pCursor->areaIdFilter = areaId;
         }
+        argIndex++;
     }
 
     return SQLITE_OK;
@@ -328,30 +308,52 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
 static int goaBestIndex(sqlite3_vtab*, sqlite3_index_info *pIndexInfo)
 {
     LOG_DEBUG("Constraints: %i", pIndexInfo->nConstraint);
-    int nNumObjectTypeConstraints = 0;
-    int nEQConstraintIndex = -1;
+
+    int objectTypeEQIndex = -1;
+    int areaIdEQIndex = -1;
+
     for (int i = 0; i < pIndexInfo->nConstraint; i++)
     {
         auto constraint = pIndexInfo->aConstraint[i];
 
-        LOG_DEBUG("%i -> Col: %i, Op: %i, Useable: %i", i, constraint.iColumn, constraint.op, constraint.usable);
+        if (!constraint.usable || constraint.op != SQLITE_INDEX_CONSTRAINT_EQ)
+            continue;
 
-        if (!constraint.usable || constraint.iColumn != GOAColumns::ObjectType)
-           continue;
-
-        nNumObjectTypeConstraints++;
-
-        if (constraint.op == SQLITE_INDEX_CONSTRAINT_EQ)
+        if (constraint.iColumn == GOAColumns::ObjectType)
         {
-            nEQConstraintIndex = i;
+            objectTypeEQIndex = i;
+        }
+        else if (constraint.iColumn == GOAColumns::AreaId)
+        {
+            areaIdEQIndex = i;
         }
     }
 
-    if (nNumObjectTypeConstraints == 1 && nEQConstraintIndex != -1)
+    int idxNum = 0;
+    int argvIndex = 1;
+
+    if (objectTypeEQIndex != -1)
     {
-        pIndexInfo->idxNum = 1;
-        pIndexInfo->aConstraintUsage[nEQConstraintIndex].argvIndex = 1;
+        idxNum |= 1;
+        pIndexInfo->aConstraintUsage[objectTypeEQIndex].argvIndex = argvIndex++;
+        pIndexInfo->aConstraintUsage[objectTypeEQIndex].omit = 1;
     }
+
+    if (areaIdEQIndex != -1)
+    {
+        idxNum |= 2;
+        pIndexInfo->aConstraintUsage[areaIdEQIndex].argvIndex = argvIndex++;
+        pIndexInfo->aConstraintUsage[areaIdEQIndex].omit = 1;
+    }
+
+    pIndexInfo->idxNum = idxNum;
+
+    if (idxNum == 3)
+        pIndexInfo->estimatedCost = 100.0;
+    else if (idxNum > 0)
+        pIndexInfo->estimatedCost = 1000.0;
+    else
+        pIndexInfo->estimatedCost = 10000.0;
 
     return SQLITE_OK;
 }
