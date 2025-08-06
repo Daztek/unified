@@ -63,7 +63,7 @@ struct CacheKeyHash
     }
 };
 
-std::unordered_map<std::string, CustomFunction> s_customFunctions;
+std::unordered_map<std::string, std::unique_ptr<CustomFunction>> s_customFunctions;
 std::unordered_map<CacheKey, ArgValue, CacheKeyHash> s_resultCache;
 
 template<typename... Args>
@@ -266,16 +266,15 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
     if (const auto it = s_customFunctions.find(name); it != s_customFunctions.end())
         return 0;
 
-    CustomFunction function;
-    function.scriptChunk = scriptChunk;
-    function.functionHash = CExoString(scriptChunk).GetHash();
-    function.argCount = argCount;
-    function.returnType = static_cast<ReturnType>(returnType);
-    function.deterministic = deterministic;
-    s_customFunctions[name] = function;
+    auto function = std::make_unique<CustomFunction>();
+    function->scriptChunk = scriptChunk;
+    function->functionHash = CExoString(scriptChunk).GetHash();
+    function->argCount = argCount;
+    function->returnType = static_cast<ReturnType>(returnType);
+    function->deterministic = deterministic;
 
     int flags = SQLITE_UTF8 | SQLITE_DIRECTONLY;
-    if (function.deterministic)
+    if (function->deterministic)
         flags |= SQLITE_DETERMINISTIC;
 
     int rc = sqlite3_create_function_v2(
@@ -283,13 +282,18 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
         name.c_str(),
         1 + argCount,
         flags,
-        &s_customFunctions[name],
+        function.get(),
         CustomFunctionCallback,
         nullptr,
         nullptr,
         nullptr);
 
-    return rc == SQLITE_OK;
+    if (rc != SQLITE_OK)
+        return 0;
+
+    s_customFunctions[name] = std::move(function);
+
+    return 1;
 }
 
 NWNX_EXPORT ArgumentStack ClearFunctionResultCache(ArgumentStack&&)
