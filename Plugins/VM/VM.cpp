@@ -1,5 +1,6 @@
 #include "nwnx.hpp"
 #include "API/CVirtualMachine.hpp"
+#include "API/CVirtualMachineDebuggerInstance.hpp"
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
@@ -109,4 +110,194 @@ NWNX_EXPORT ArgumentStack GetScriptParamSet(ArgumentStack&& args)
     }
 
     return retVal;
+}
+
+NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    auto dbg = pVM->GetDebuggerInstance();
+    auto depth = args.extract<int32_t>();
+
+    JsonEngineStructure j;
+    j.m_shared->m_json = json::array();
+
+    int32_t finalInstructionPointer;
+    if (depth == 0)
+        finalInstructionPointer = *pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel];
+    else if (depth >= 1 && depth <= pVM->m_nInstructPtrLevel - 1)
+        finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[pVM->m_nInstructPtrLevel - depth];
+    else
+        return j;
+
+    int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
+    int32_t currentStackPointer = pVM->m_cRunTimeStack.GetStackPointer();
+    int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
+    int32_t functionCount = pVM->m_nInstructPtrLevel;
+
+    while (depth > 0)
+    {
+        --depth;
+        --functionCount;
+        currentStackPointer -= (stackSize >> 2);
+        int32_t runTimePtr = pVM->m_pnRunTimeInstructPtr[functionCount];
+        functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(runTimePtr);
+        stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,runTimePtr);
+    }
+
+    int32_t baseStackLocation = currentStackPointer - (stackSize >> 2);
+    int32_t topMostStackEntry;
+    if (dbg->GenerateTypeSize(&dbg->m_pDebugFunctionReturnTypeNames[functionIdentifier]) == 0)
+        topMostStackEntry = -1;
+    else
+        topMostStackEntry = 0;
+
+    int32_t debugVariableLocation, totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
+    for (int32_t parameterCount = 0; parameterCount < totalParameters; ++parameterCount)
+    {
+        debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
+        int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
+
+        if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
+            topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
+
+        json jStackVar = json::object();
+        jStackVar["stack_location"] = stackLocation;
+        jStackVar["name"] = dbg->m_pDebugVariableNames[debugVariableLocation];
+        jStackVar["type"] = dbg->m_pDebugVariableTypeNames[debugVariableLocation];
+        j.m_shared->m_json.emplace_back(jStackVar);
+    }
+
+    debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
+    while (debugVariableLocation != -1)
+    {
+        int32_t stackLocation = (baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2));
+        topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
+
+
+        json jStackVar = json::object();
+        jStackVar["stack_location"] = stackLocation;
+        jStackVar["name"] = dbg->m_pDebugVariableNames[debugVariableLocation];
+        jStackVar["type"] = dbg->m_pDebugVariableTypeNames[debugVariableLocation];
+        j.m_shared->m_json.emplace_back(jStackVar);
+
+        debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
+    }
+
+    return j;
+}
+
+NWNX_EXPORT ArgumentStack SetStackIntegerValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::INTEGER)
+            stackNode.m_nStackInt = value;
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackIntegerValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::INTEGER)
+            return stackNode.m_nStackInt;
+    }
+    return 0;
+}
+
+NWNX_EXPORT ArgumentStack SetStackFloatValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<float>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::FLOAT)
+            stackNode.m_fStackFloat = value;
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackFloatValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::FLOAT)
+            return stackNode.m_fStackFloat;
+    }
+    return 0.0f;
+}
+
+NWNX_EXPORT ArgumentStack SetStackObjectValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<ObjectID>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::OBJECT)
+            stackNode.m_nStackObjectID = value;
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackObjectValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::OBJECT)
+            return stackNode.m_nStackObjectID;
+    }
+    return Constants::OBJECT_INVALID;
+}
+
+NWNX_EXPORT ArgumentStack SetStackStringValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<std::string>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::STRING)
+            stackNode.m_sString = value;
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackStringValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::STRING)
+            return stackNode.m_sString;
+    }
+    return "";
 }
