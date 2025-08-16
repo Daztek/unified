@@ -301,3 +301,75 @@ NWNX_EXPORT ArgumentStack GetStackStringValue(ArgumentStack&& args)
     }
     return "";
 }
+
+NWNX_EXPORT ArgumentStack SetStackLocationValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<CScriptLocation>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::ENGST2)
+        {
+            StackElement tempStack;
+            tempStack.Init(StackElement::ENGST2);
+            tempStack.m_pStackPtr = (void*)(&value);
+            stackNode.Clear(pVM->m_pCmdImplementer);
+            stackNode.CopyFrom(tempStack, pVM->m_pCmdImplementer);
+        }
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackLocationValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::ENGST2)
+            return *static_cast<CScriptLocation*>(stackNode.m_pStackPtr);
+    }
+    CScriptLocation loc;
+    return loc;
+}
+
+NWNX_EXPORT ArgumentStack SetStackJsonValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+    const auto value = args.extract<JsonEngineStructure>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::ENGST7)
+        {
+            StackElement tempStack;
+            tempStack.Init(StackElement::ENGST7);
+            tempStack.m_pStackPtr = (void*)(&value);
+            stackNode.Clear(pVM->m_pCmdImplementer);
+            stackNode.CopyFrom(tempStack, pVM->m_pCmdImplementer);
+        }
+    }
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackJsonValue(ArgumentStack&& args)
+{
+    auto *pVM = Globals::VirtualMachine();
+    const auto stackLocation = args.extract<int32_t>();
+
+    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
+    {
+        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
+        if (stackNode.m_nType == StackElement::ENGST7)
+            return *static_cast<JsonEngineStructure*>(stackNode.m_pStackPtr);
+    }
+    JsonEngineStructure j;
+    return j;
+}

@@ -84,9 +84,29 @@ object NWNX_VM_GetStackObjectValue(int nStackLocation);
 void NWNX_VM_SetStackStringValue(int nStackLocation, string sValue);
 
 // Get the string value at nStackLocation.
-// - nStackLocation: The location of the object on the stack.
+// - nStackLocation: The location of the string on the stack.
 // * Returns the value of the string or "" on error.
 string NWNX_VM_GetStackStringValue(int nStackLocation);
+
+// Set the location value at nStackLocation to locValue.
+// - nStackLocation: The location of the location on the stack.
+// - jValue: The value to set the location to.
+void NWNX_VM_SetStackLocationValue(int nStackLocation, location locValue);
+
+// Get the location value at nStackLocation.
+// - nStackLocation: The location of the location on the stack.
+// * Returns the value of the location or LOCATION_INVALID on error.
+location NWNX_VM_GetStackLocationValue(int nStackLocation);
+
+// Set the json value at nStackLocation to jValue.
+// - nStackLocation: The location of the json on the stack.
+// - jValue: The value to set the json to.
+void NWNX_VM_SetStackJsonValue(int nStackLocation, json jValue);
+
+// Get the json value at nStackLocation.
+// - nStackLocation: The location of the json on the stack.
+// * Returns the value of the json or JsonNull() on error.
+json NWNX_VM_GetStackJsonValue(int nStackLocation);
 
 int NWNX_VM_GetScriptReturnValueType()
 {
@@ -210,4 +230,32 @@ string NWNX_VM_GetStackStringValue(int nStackLocation)
     NWNXPushInt(nStackLocation);
     NWNXCall(NWNX_VM, "GetStackStringValue");
     return NWNXPopString();
+}
+
+void NWNX_VM_SetStackLocationValue(int nStackLocation, location locValue)
+{
+    NWNXPushLocation(locValue);
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "SetStackLocationValue");
+}
+
+location NWNX_VM_GetStackLocationValue(int nStackLocation)
+{
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "GetStackLocationValue");
+    return NWNXPopLocation();
+}
+
+void NWNX_VM_SetStackJsonValue(int nStackLocation, json jValue)
+{
+    NWNXPushJson(jValue);
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "SetStackJsonValue");
+}
+
+json NWNX_VM_GetStackJsonValue(int nStackLocation)
+{
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "GetStackJsonValue");
+    return NWNXPopJson();
 }
