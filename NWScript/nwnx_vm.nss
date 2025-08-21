@@ -45,7 +45,7 @@ int NWNX_VM_GetScriptParamSet(string sParamName);
 
 // Get the current stack variables at nDepth.
 // - nDepth: 0 = current function, 1 = calling function etc.
-// * Returns a json array with json objects containing the name, type and stack location of all variables on the stack at the point of calling.
+// * Returns a json object that has visible variable names as keys with json objects that contain the type and stack location.
 json NWNX_VM_GetCurrentStack(int nDepth);
 
 // Set the integer value at nStackLocation to nValue.

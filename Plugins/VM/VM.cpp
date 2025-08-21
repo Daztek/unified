@@ -119,7 +119,7 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
     auto depth = args.extract<int32_t>();
 
     JsonEngineStructure j;
-    j.m_shared->m_json = json::array();
+    j.m_shared->m_json = json::object();
 
     int32_t finalInstructionPointer;
     if (depth == 0)
@@ -151,6 +151,39 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
     else
         topMostStackEntry = 0;
 
+    auto StringTypeToAuxType = [](const CExoString& stringType) -> Constants::VMAuxCodeType::TYPE
+    {
+        if (stringType.IsEmpty())
+            return Constants::VMAuxCodeType::Invalid;
+
+        switch (stringType.CStr()[0])
+        {
+            case 'v': return Constants::VMAuxCodeType::Void;
+            case 'i': return Constants::VMAuxCodeType::Integer;
+            case 'f': return Constants::VMAuxCodeType::Float;
+            case 'o': return Constants::VMAuxCodeType::Object;
+            case 's': return Constants::VMAuxCodeType::String;
+            case 'e':
+            {
+                switch (stringType.CStr()[1])
+                {
+                    case '0': return Constants::VMAuxCodeType::EngSt0;
+                    case '1': return Constants::VMAuxCodeType::EngSt1;
+                    case '2': return Constants::VMAuxCodeType::EngSt2;
+                    case '3': return Constants::VMAuxCodeType::EngSt3;
+                    case '4': return Constants::VMAuxCodeType::EngSt4;
+                    case '5': return Constants::VMAuxCodeType::EngSt5;
+                    case '6': return Constants::VMAuxCodeType::EngSt6;
+                    case '7': return Constants::VMAuxCodeType::EngSt7;
+                    case '8': return Constants::VMAuxCodeType::EngSt8;
+                    case '9': return Constants::VMAuxCodeType::EngSt9;
+                }
+            }
+        }
+
+        return Constants::VMAuxCodeType::Invalid;
+    };
+
     int32_t debugVariableLocation, totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
     for (int32_t parameterCount = 0; parameterCount < totalParameters; ++parameterCount)
     {
@@ -160,11 +193,14 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
         if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
             topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-        json jStackVar = json::object();
-        jStackVar["stack_location"] = stackLocation;
-        jStackVar["name"] = dbg->m_pDebugVariableNames[debugVariableLocation];
-        jStackVar["type"] = dbg->m_pDebugVariableTypeNames[debugVariableLocation];
-        j.m_shared->m_json.emplace_back(jStackVar);
+        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
+        if (auxType != Constants::VMAuxCodeType::Invalid)
+        {
+            json jStackVar = json::object();
+            jStackVar["stack_location"] = stackLocation;
+            jStackVar["type"] = auxType;
+            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+        }
     }
 
     debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
@@ -173,12 +209,14 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
         int32_t stackLocation = (baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2));
         topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-
-        json jStackVar = json::object();
-        jStackVar["stack_location"] = stackLocation;
-        jStackVar["name"] = dbg->m_pDebugVariableNames[debugVariableLocation];
-        jStackVar["type"] = dbg->m_pDebugVariableTypeNames[debugVariableLocation];
-        j.m_shared->m_json.emplace_back(jStackVar);
+        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
+        if (auxType != Constants::VMAuxCodeType::Invalid)
+        {
+            json jStackVar = json::object();
+            jStackVar["stack_location"] = stackLocation;
+            jStackVar["type"] = auxType;
+            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+        }
 
         debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
     }
