@@ -151,7 +151,7 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
     else
         topMostStackEntry = 0;
 
-    auto StringTypeToAuxType = [](const CExoString& stringType) -> Constants::VMAuxCodeType::TYPE
+    static auto StringTypeToAuxType = [](const CExoString& stringType) -> Constants::VMAuxCodeType::TYPE
     {
         if (stringType.IsEmpty())
             return Constants::VMAuxCodeType::Invalid;
@@ -184,8 +184,34 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
         return Constants::VMAuxCodeType::Invalid;
     };
 
+    auto ProcessStruct = [&dbg, &j](const int32_t debugVariableLocation, const int32_t stackLocation) -> bool
+    {
+        if (dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr()[0] == 't')
+        {
+            const int32_t structureDefinition = atoi(dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr() + 1);
+            const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
+            int32_t currentSize = 0;
+            const CExoString structureVariableName = dbg->m_pDebugVariableNames[debugVariableLocation] + ".";
+            for (int32_t structureField = 0; structureField < structureFields; structureField++)
+            {
+                int32_t structVarStackLocation = stackLocation + (currentSize >> 2);
+                const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+                if (auxType != Constants::VMAuxCodeType::Invalid)
+                {
+                    json jStackVar = json::object();
+                    jStackVar["stack_location"] = structVarStackLocation;
+                    jStackVar["type"] = auxType;
+                    j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
+                }
+                currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+            }
+            return true;
+        }
+        return false;
+    };
+
     int32_t debugVariableLocation, totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
-    for (int32_t parameterCount = 0; parameterCount < totalParameters; ++parameterCount)
+    for (int32_t parameterCount = 0; parameterCount < totalParameters; parameterCount++)
     {
         debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
         int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
@@ -193,31 +219,36 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
         if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
             topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
-        if (auxType != Constants::VMAuxCodeType::Invalid)
+        if (!ProcessStruct(debugVariableLocation, stackLocation))
         {
-            json jStackVar = json::object();
-            jStackVar["stack_location"] = stackLocation;
-            jStackVar["type"] = auxType;
-            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+            const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugFunctionParamTypeNames[functionIdentifier][parameterCount]);
+            if (auxType != Constants::VMAuxCodeType::Invalid)
+            {
+                json jStackVar = json::object();
+                jStackVar["stack_location"] = stackLocation;
+                jStackVar["type"] = auxType;
+                j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+            }
         }
     }
 
     debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
     while (debugVariableLocation != -1)
     {
-        int32_t stackLocation = (baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2));
+        int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
         topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
-        if (auxType != Constants::VMAuxCodeType::Invalid)
+        if (!ProcessStruct(debugVariableLocation, stackLocation))
         {
-            json jStackVar = json::object();
-            jStackVar["stack_location"] = stackLocation;
-            jStackVar["type"] = auxType;
-            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+            const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
+            if (auxType != Constants::VMAuxCodeType::Invalid)
+            {
+                json jStackVar = json::object();
+                jStackVar["stack_location"] = stackLocation;
+                jStackVar["type"] = auxType;
+                j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
+            }
         }
-
         debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
     }
 
