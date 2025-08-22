@@ -184,7 +184,43 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
         return Constants::VMAuxCodeType::Invalid;
     };
 
-    auto ProcessStruct = [&dbg, &j](const int32_t debugVariableLocation, const int32_t stackLocation) -> bool
+    std::function<bool(const CExoString&, int, int, int)> ProcessStructInStruct = [&](const CExoString& parentStr, const int32_t strDef, const int32_t strField, const int32_t strStackLoc) -> bool
+    {
+        if (dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr()[0] == 't')
+        {
+            const int32_t structureDefinition = atoi(dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr() + 1);
+            const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
+            int32_t currentSize = 0;
+            const CExoString structureVariableName = parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField] + ".";
+
+            json jStruct = json::object();
+            jStruct["stack_location"] = strStackLoc;
+            jStruct["type"] = Constants::VMAuxCodeType::Void;
+            jStruct["struct_name"] = dbg->m_pDebugStructureNames[structureDefinition];
+            j.m_shared->m_json[parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField]] = jStruct;
+
+            for (int32_t structureField = 0; structureField < structureFields; structureField++)
+            {
+                int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
+                if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
+                {
+                    const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+                    if (auxType != Constants::VMAuxCodeType::Invalid)
+                    {
+                        json jStackVar = json::object();
+                        jStackVar["stack_location"] = structVarStackLocation;
+                        jStackVar["type"] = auxType;
+                        j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
+                    }
+                }
+                currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+            }
+            return true;
+        }
+        return false;
+    };
+
+    auto ProcessStruct = [&dbg, &j, ProcessStructInStruct](const int32_t debugVariableLocation, const int32_t stackLocation) -> bool
     {
         if (dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr()[0] == 't')
         {
@@ -192,16 +228,26 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
             const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
             int32_t currentSize = 0;
             const CExoString structureVariableName = dbg->m_pDebugVariableNames[debugVariableLocation] + ".";
+
+            json jStruct = json::object();
+            jStruct["stack_location"] = stackLocation;
+            jStruct["type"] = Constants::VMAuxCodeType::Void;
+            jStruct["struct_name"] = dbg->m_pDebugStructureNames[structureDefinition];
+            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStruct;
+
             for (int32_t structureField = 0; structureField < structureFields; structureField++)
             {
                 int32_t structVarStackLocation = stackLocation + (currentSize >> 2);
-                const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                if (auxType != Constants::VMAuxCodeType::Invalid)
+                if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
                 {
-                    json jStackVar = json::object();
-                    jStackVar["stack_location"] = structVarStackLocation;
-                    jStackVar["type"] = auxType;
-                    j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
+                    const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+                    if (auxType != Constants::VMAuxCodeType::Invalid)
+                    {
+                        json jStackVar = json::object();
+                        jStackVar["stack_location"] = structVarStackLocation;
+                        jStackVar["type"] = auxType;
+                        j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
+                    }
                 }
                 currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
             }
