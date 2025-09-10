@@ -17,5 +17,5 @@ NWNX_EXPORT ArgumentStack JsonObjectContainsKey(ArgumentStack&& args)
 {
     const auto object = args.extract<JsonEngineStructure>();
     const auto key = args.extract<std::string>();
-    return object.m_shared->m_json.is_object() && object.m_shared->m_json.contains(key);
+    return object.m_shared->m_json.contains(key);
 }
