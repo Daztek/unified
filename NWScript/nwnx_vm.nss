@@ -1,15 +1,27 @@
 const string NWNX_VM = "NWNX_VM";
 
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_INVALID  = 0x0;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_VOID     = 0x01;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_INT      = 0x03;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_FLOAT    = 0x04;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_STRING   = 0x05;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_OBJECT   = 0x06;
-const int NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_JSON     = 0x17;
+const int NWNX_VM_AUXTYPE_INVALID       = 0x00;
+const int NWNX_VM_AUXTYPE_VOID          = 0x01;
+const int NWNX_VM_AUXTYPE_COMMAND       = 0x02;
+const int NWNX_VM_AUXTYPE_INT           = 0x03;
+const int NWNX_VM_AUXTYPE_FLOAT         = 0x04;
+const int NWNX_VM_AUXTYPE_STRING        = 0x05;
+const int NWNX_VM_AUXTYPE_OBJECT        = 0x06;
+const int NWNX_VM_AUXTYPE_EFFECT        = 0x10;
+const int NWNX_VM_AUXTYPE_EVENT         = 0x11;
+const int NWNX_VM_AUXTYPE_LOCATION      = 0x12;
+const int NWNX_VM_AUXTYPE_TALENT        = 0x13;
+const int NWNX_VM_AUXTYPE_ITEMPROPERTY  = 0x14;
+const int NWNX_VM_AUXTYPE_SQLQUERY      = 0x15;
+const int NWNX_VM_AUXTYPE_CSWYSOLVER    = 0x16;
+const int NWNX_VM_AUXTYPE_JSON          = 0x17;
+
+const string NWNX_VM_STRUCT_NAME_KEY    = "struct_name";
+const string NWNX_VM_TYPE_KEY           = "type";
+const string NWNX_VM_STACK_LOCATION_KEY = "stack_location";
 
 // Get the return value type of the last script executed with ExecuteScript() or ExecuteScriptChunk().
-// Returns a NWNX_VM_SCRIPT_RETURN_VALUE_TYPE_*
+// Returns a NWNX_VM_AUXTYPE_*
 int NWNX_VM_GetScriptReturnValueType();
 
 // Get the returned int value of the last script executed with ExecuteScript() or ExecuteScriptChunk() or 0 on error.
