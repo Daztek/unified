@@ -250,6 +250,11 @@ string NWNX_Util_GetModuleTlkFile();
 /// @return TRUE if successful, FALSE on error.
 int NWNX_Util_UpdateResourceDirectory(string sAlias);
 
+/// @brief Escape Regex special characters in a string.
+/// @param sString The string to escape.
+/// @return An escaped string.
+string NWNX_Util_RegExpEscape(string sString);
+
 /// @}
 
 string NWNX_Util_GetCurrentScriptName(int depth = 0)
@@ -537,4 +542,11 @@ int NWNX_Util_UpdateResourceDirectory(string sAlias)
     NWNXPushString(sAlias);
     NWNXCall(NWNX_Util, "UpdateResourceDirectory");
     return NWNXPopInt();
+}
+
+string NWNX_Util_RegExpEscape(string sString)
+{
+    NWNXPushString(sString);
+    NWNXCall(NWNX_Util, "RegExpEscape");
+    return NWNXPopString();
 }

@@ -745,3 +745,23 @@ NWNX_EXPORT ArgumentStack UpdateResourceDirectory(ArgumentStack&& args)
       ASSERT_OR_THROW(!alias.empty());
     return Globals::ExoResMan()->UpdateResourceDirectory(alias + ":");
 }
+
+NWNX_EXPORT ArgumentStack RegExpEscape(ArgumentStack&& args)
+{
+    const auto input = args.extract<std::string>();
+
+    std::string result;
+    result.reserve(input.size() * 2);
+
+    for (const char c : input)
+    {
+        if (c == '^' || c == '$' || c == '|' || c == '(' || c == ')' ||
+            c == '[' || c == ']' || c == '{' || c == '}' || c == '*' ||
+            c == '+' || c == '?' || c == '\\' || c == '.')
+        {
+            result += '\\';
+        }
+        result += c;
+    }
+    return result;
+}
