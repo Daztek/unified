@@ -297,6 +297,30 @@ namespace VM::ReturnTypeExtension
     bool GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst);
 }
 
+namespace VM::StackManipulation
+{
+    struct StackVariable
+    {
+        API::Constants::VMAuxCodeType::TYPE auxType;
+        int32_t stackLocation;
+        std::string structName;
+    };
+
+    std::unordered_map<std::string, StackVariable> GetCurrentStack(int32_t depth);
+    void SetStackIntegerValue(int32_t nStackLocation, int32_t nValue);
+    int32_t GetStackIntegerValue(int32_t nStackLocation);
+    void SetStackFloatValue(int32_t nStackLocation, float fValue);
+    float GetStackFloatValue(int32_t nStackLocation);
+    void SetStackObjectValue(int32_t nStackLocation, ObjectID oidValue);
+    ObjectID GetStackObjectValue(int32_t nStackLocation);
+    void SetStackStringValue(int32_t nStackLocation, const CExoString& sValue);
+    CExoString GetStackStringValue(int32_t nStackLocation);
+    void SetStackLocationValue(int32_t nStackLocation, CScriptLocation* locValue);
+    CScriptLocation GetStackLocationValue(int32_t nStackLocation);
+    void SetStackJsonValue(int32_t nStackLocation, JsonEngineStructure* jValue);
+    JsonEngineStructure GetStackJsonValue(int32_t nStackLocation);
+}
+
 }
 
 #include "Assert.hpp"

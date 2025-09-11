@@ -1,1 +1,1 @@
-nwnxlib_add("ReturnTypeExtension.cpp")
+nwnxlib_add("ReturnTypeExtension.cpp" "StackManipulation.cpp")

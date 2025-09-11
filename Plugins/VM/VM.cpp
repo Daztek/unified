@@ -1,6 +1,5 @@
 #include "nwnx.hpp"
 #include "API/CVirtualMachine.hpp"
-#include "API/CVirtualMachineDebuggerInstance.hpp"
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
@@ -114,188 +113,19 @@ NWNX_EXPORT ArgumentStack GetScriptParamSet(ArgumentStack&& args)
 
 NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
-    auto dbg = pVM->GetDebuggerInstance();
     auto depth = args.extract<int32_t>();
 
     JsonEngineStructure j;
     j.m_shared->m_json = json::object();
 
-    int32_t finalInstructionPointer;
-    if (depth == 0)
-        finalInstructionPointer = *pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel];
-    else if (depth >= 1 && depth <= pVM->m_nInstructPtrLevel - 1)
-        finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[pVM->m_nInstructPtrLevel - depth];
-    else
-        return j;
-
-    int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
-    int32_t currentStackPointer = pVM->m_cRunTimeStack.GetStackPointer();
-    int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
-    int32_t functionCount = pVM->m_nInstructPtrLevel;
-
-    while (depth > 0)
+    const auto currentStack = Globals::VirtualMachine()->GetCurrentStack(depth);
+    for (const auto&[varName, varData]: currentStack)
     {
-        --depth;
-        --functionCount;
-        currentStackPointer -= (stackSize >> 2);
-        int32_t runTimePtr = pVM->m_pnRunTimeInstructPtr[functionCount];
-        functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(runTimePtr);
-        stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,runTimePtr);
-    }
-
-    int32_t baseStackLocation = currentStackPointer - (stackSize >> 2);
-    int32_t topMostStackEntry;
-    if (dbg->GenerateTypeSize(&dbg->m_pDebugFunctionReturnTypeNames[functionIdentifier]) == 0)
-        topMostStackEntry = -1;
-    else
-        topMostStackEntry = 0;
-
-    static auto StringTypeToAuxType = [](const CExoString& stringType) -> Constants::VMAuxCodeType::TYPE
-    {
-        if (stringType.IsEmpty())
-            return Constants::VMAuxCodeType::Invalid;
-
-        switch (stringType.CStr()[0])
-        {
-            case 'v': return Constants::VMAuxCodeType::Void;
-            case 'i': return Constants::VMAuxCodeType::Integer;
-            case 'f': return Constants::VMAuxCodeType::Float;
-            case 'o': return Constants::VMAuxCodeType::Object;
-            case 's': return Constants::VMAuxCodeType::String;
-            case 'e':
-            {
-                switch (stringType.CStr()[1])
-                {
-                    case '0': return Constants::VMAuxCodeType::EngSt0;
-                    case '1': return Constants::VMAuxCodeType::EngSt1;
-                    case '2': return Constants::VMAuxCodeType::EngSt2;
-                    case '3': return Constants::VMAuxCodeType::EngSt3;
-                    case '4': return Constants::VMAuxCodeType::EngSt4;
-                    case '5': return Constants::VMAuxCodeType::EngSt5;
-                    case '6': return Constants::VMAuxCodeType::EngSt6;
-                    case '7': return Constants::VMAuxCodeType::EngSt7;
-                    case '8': return Constants::VMAuxCodeType::EngSt8;
-                    case '9': return Constants::VMAuxCodeType::EngSt9;
-                }
-            }
-        }
-
-        return Constants::VMAuxCodeType::Invalid;
-    };
-
-    std::function<bool(const CExoString&, int, int, int)> ProcessStructInStruct = [&](const CExoString& parentStr, const int32_t strDef, const int32_t strField, const int32_t strStackLoc) -> bool
-    {
-        if (dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr()[0] == 't')
-        {
-            const int32_t structureDefinition = atoi(dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr() + 1);
-            const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
-            int32_t currentSize = 0;
-            const CExoString structureVariableName = parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField] + ".";
-
-            json jStruct = json::object();
-            jStruct["stack_location"] = strStackLoc;
-            jStruct["type"] = Constants::VMAuxCodeType::Void;
-            jStruct["struct_name"] = dbg->m_pDebugStructureNames[structureDefinition];
-            j.m_shared->m_json[parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField]] = jStruct;
-
-            for (int32_t structureField = 0; structureField < structureFields; structureField++)
-            {
-                int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
-                if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
-                {
-                    const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                    if (auxType != Constants::VMAuxCodeType::Invalid)
-                    {
-                        json jStackVar = json::object();
-                        jStackVar["stack_location"] = structVarStackLocation;
-                        jStackVar["type"] = auxType;
-                        j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
-                    }
-                }
-                currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-            }
-            return true;
-        }
-        return false;
-    };
-
-    auto ProcessStruct = [&dbg, &j, ProcessStructInStruct](const int32_t debugVariableLocation, const int32_t stackLocation) -> bool
-    {
-        if (dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr()[0] == 't')
-        {
-            const int32_t structureDefinition = atoi(dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr() + 1);
-            const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
-            int32_t currentSize = 0;
-            const CExoString structureVariableName = dbg->m_pDebugVariableNames[debugVariableLocation] + ".";
-
-            json jStruct = json::object();
-            jStruct["stack_location"] = stackLocation;
-            jStruct["type"] = Constants::VMAuxCodeType::Void;
-            jStruct["struct_name"] = dbg->m_pDebugStructureNames[structureDefinition];
-            j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStruct;
-
-            for (int32_t structureField = 0; structureField < structureFields; structureField++)
-            {
-                int32_t structVarStackLocation = stackLocation + (currentSize >> 2);
-                if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
-                {
-                    const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                    if (auxType != Constants::VMAuxCodeType::Invalid)
-                    {
-                        json jStackVar = json::object();
-                        jStackVar["stack_location"] = structVarStackLocation;
-                        jStackVar["type"] = auxType;
-                        j.m_shared->m_json[structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField]] = jStackVar;
-                    }
-                }
-                currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-            }
-            return true;
-        }
-        return false;
-    };
-
-    int32_t debugVariableLocation, totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
-    for (int32_t parameterCount = 0; parameterCount < totalParameters; parameterCount++)
-    {
-        debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
-        int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
-
-        if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
-            topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
-
-        if (!ProcessStruct(debugVariableLocation, stackLocation))
-        {
-            const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugFunctionParamTypeNames[functionIdentifier][parameterCount]);
-            if (auxType != Constants::VMAuxCodeType::Invalid)
-            {
-                json jStackVar = json::object();
-                jStackVar["stack_location"] = stackLocation;
-                jStackVar["type"] = auxType;
-                j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
-            }
-        }
-    }
-
-    debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
-    while (debugVariableLocation != -1)
-    {
-        int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
-        topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
-
-        if (!ProcessStruct(debugVariableLocation, stackLocation))
-        {
-            const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
-            if (auxType != Constants::VMAuxCodeType::Invalid)
-            {
-                json jStackVar = json::object();
-                jStackVar["stack_location"] = stackLocation;
-                jStackVar["type"] = auxType;
-                j.m_shared->m_json[dbg->m_pDebugVariableNames[debugVariableLocation]] = jStackVar;
-            }
-        }
-        debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
+        json stackVar = json::object();
+        stackVar["type"] = varData.auxType;
+        stackVar["stack_location"] = varData.stackLocation;
+        stackVar["struct_name"] = varData.structName;
+        j.m_shared->m_json[varName] = stackVar;
     }
 
     return j;
@@ -303,188 +133,84 @@ NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
 
 NWNX_EXPORT ArgumentStack SetStackIntegerValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
     const auto value = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::INTEGER)
-            stackNode.m_nStackInt = value;
-    }
+    Globals::VirtualMachine()->SetStackIntegerValue(stackLocation, value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackIntegerValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::INTEGER)
-            return stackNode.m_nStackInt;
-    }
-    return 0;
+    return Globals::VirtualMachine()->GetStackIntegerValue(stackLocation);
 }
 
 NWNX_EXPORT ArgumentStack SetStackFloatValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
     const auto value = args.extract<float>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::FLOAT)
-            stackNode.m_fStackFloat = value;
-    }
+    Globals::VirtualMachine()->SetStackFloatValue(stackLocation, value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackFloatValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::FLOAT)
-            return stackNode.m_fStackFloat;
-    }
-    return 0.0f;
+    return Globals::VirtualMachine()->GetStackFloatValue(stackLocation);
 }
 
 NWNX_EXPORT ArgumentStack SetStackObjectValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
     const auto value = args.extract<ObjectID>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::OBJECT)
-            stackNode.m_nStackObjectID = value;
-    }
+    Globals::VirtualMachine()->SetStackObjectValue(stackLocation, value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackObjectValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::OBJECT)
-            return stackNode.m_nStackObjectID;
-    }
-    return Constants::OBJECT_INVALID;
+    return Globals::VirtualMachine()->GetStackObjectValue(stackLocation);
 }
 
 NWNX_EXPORT ArgumentStack SetStackStringValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
     const auto value = args.extract<std::string>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::STRING)
-            stackNode.m_sString = value;
-    }
+    Globals::VirtualMachine()->SetStackStringValue(stackLocation, value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackStringValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::STRING)
-            return stackNode.m_sString;
-    }
-    return "";
+    return Globals::VirtualMachine()->GetStackStringValue(stackLocation);
 }
 
 NWNX_EXPORT ArgumentStack SetStackLocationValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-    const auto value = args.extract<CScriptLocation>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::ENGST2)
-        {
-            StackElement tempStack;
-            tempStack.Init(StackElement::ENGST2);
-            tempStack.m_pStackPtr = (void*)(&value);
-            stackNode.Clear(pVM->m_pCmdImplementer);
-            stackNode.CopyFrom(tempStack, pVM->m_pCmdImplementer);
-        }
-    }
+    auto value = args.extract<CScriptLocation>();
+    Globals::VirtualMachine()->SetStackLocationValue(stackLocation, &value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackLocationValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::ENGST2)
-            return *static_cast<CScriptLocation*>(stackNode.m_pStackPtr);
-    }
-    CScriptLocation loc;
-    return loc;
+    return Globals::VirtualMachine()->GetStackLocationValue(stackLocation);
 }
 
 NWNX_EXPORT ArgumentStack SetStackJsonValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-    const auto value = args.extract<JsonEngineStructure>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::ENGST7)
-        {
-            StackElement tempStack;
-            tempStack.Init(StackElement::ENGST7);
-            tempStack.m_pStackPtr = (void*)(&value);
-            stackNode.Clear(pVM->m_pCmdImplementer);
-            stackNode.CopyFrom(tempStack, pVM->m_pCmdImplementer);
-        }
-    }
+    auto value = args.extract<JsonEngineStructure>();
+    Globals::VirtualMachine()->SetStackJsonValue(stackLocation, &value);
     return {};
 }
 
 NWNX_EXPORT ArgumentStack GetStackJsonValue(ArgumentStack&& args)
 {
-    auto *pVM = Globals::VirtualMachine();
     const auto stackLocation = args.extract<int32_t>();
-
-    if (stackLocation >= 0 && stackLocation < pVM->m_cRunTimeStack.m_nTotalSize)
-    {
-        auto &stackNode = pVM->m_cRunTimeStack.GetStackNode(stackLocation);
-        if (stackNode.m_nType == StackElement::ENGST7)
-            return *static_cast<JsonEngineStructure*>(stackNode.m_pStackPtr);
-    }
-    JsonEngineStructure j;
-    return j;
+    return Globals::VirtualMachine()->GetStackJsonValue(stackLocation);
 }
