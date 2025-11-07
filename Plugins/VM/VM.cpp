@@ -111,20 +111,25 @@ NWNX_EXPORT ArgumentStack GetScriptParamSet(ArgumentStack&& args)
     return retVal;
 }
 
-NWNX_EXPORT ArgumentStack GetCurrentStack(ArgumentStack&& args)
+NWNX_EXPORT ArgumentStack GetStackVariables(ArgumentStack&& args)
 {
     auto depth = args.extract<int32_t>();
+      ASSERT_OR_THROW(depth >= 0);
 
     JsonEngineStructure j;
     j.m_shared->m_json = json::object();
 
-    const auto currentStack = Globals::VirtualMachine()->GetCurrentStack(depth);
-    for (const auto&[varName, varData]: currentStack)
+    const auto currentStack = Globals::VirtualMachine()->GetStackFrame(depth);
+    if (currentStack.functionName.empty())
+        return j;
+
+    for (const auto&[varName, varData]: currentStack.stackVariables)
     {
         json stackVar = json::object();
         stackVar["type"] = varData.auxType;
         stackVar["stack_location"] = varData.stackLocation;
         stackVar["struct_name"] = varData.structName;
+        stackVar["is_parameter"] = varData.isParameter;
         j.m_shared->m_json[varName] = stackVar;
     }
 
