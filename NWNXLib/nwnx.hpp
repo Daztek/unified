@@ -304,9 +304,17 @@ namespace VM::StackManipulation
         API::Constants::VMAuxCodeType::TYPE auxType;
         int32_t stackLocation;
         std::string structName;
+        bool isParameter;
     };
 
-    std::unordered_map<std::string, StackVariable> GetCurrentStack(int32_t depth);
+    struct StackFrame
+    {
+        std::string functionName;
+        int32_t depth;
+        std::vector<std::pair<std::string, StackVariable>> stackVariables;
+    };
+
+    StackFrame GetStackFrame(int32_t depth);
     void SetStackIntegerValue(int32_t nStackLocation, int32_t nValue);
     int32_t GetStackIntegerValue(int32_t nStackLocation);
     void SetStackFloatValue(int32_t nStackLocation, float fValue);

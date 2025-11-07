@@ -240,7 +240,7 @@ struct CNetConnectionId : public DistinctSimpleType<uint32_t>
     bool GetRunScriptReturnValueString(CExoString* pString);                                                                \
     bool GetRunScriptReturnValueObject(ObjectID* pObjectID);                                                                \
     bool GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst);                               \
-    std::unordered_map<std::string, NWNXLib::VM::StackManipulation::StackVariable> GetCurrentStack(int32_t nDepth);         \
+    NWNXLib::VM::StackManipulation::StackFrame GetStackFrame(int32_t nDepth);                                               \
     void SetStackIntegerValue(int32_t nStackLocation, int32_t nValue);                                                      \
     int32_t GetStackIntegerValue(int32_t nStackLocation);                                                                   \
     void SetStackFloatValue(int32_t nStackLocation, float fValue);                                                          \
