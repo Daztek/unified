@@ -312,9 +312,10 @@ namespace VM::StackManipulation
         std::string functionName;
         int32_t depth;
         std::vector<std::pair<std::string, StackVariable>> stackVariables;
+        bool IsValid() const { return !functionName.empty(); }
     };
 
-    StackFrame GetStackFrame(int32_t depth);
+    StackFrame GetStackFrame(int32_t nDepth);
     void SetStackIntegerValue(int32_t nStackLocation, int32_t nValue);
     int32_t GetStackIntegerValue(int32_t nStackLocation);
     void SetStackFloatValue(int32_t nStackLocation, float fValue);

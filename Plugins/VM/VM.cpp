@@ -119,18 +119,17 @@ NWNX_EXPORT ArgumentStack GetStackVariables(ArgumentStack&& args)
     JsonEngineStructure j;
     j.m_shared->m_json = json::object();
 
-    const auto currentStack = Globals::VirtualMachine()->GetStackFrame(depth);
-    if (currentStack.functionName.empty())
-        return j;
-
-    for (const auto&[varName, varData]: currentStack.stackVariables)
+    if (const auto currentStack = Globals::VirtualMachine()->GetStackFrame(depth); currentStack.IsValid())
     {
-        json stackVar = json::object();
-        stackVar["type"] = varData.auxType;
-        stackVar["stack_location"] = varData.stackLocation;
-        stackVar["struct_name"] = varData.structName;
-        stackVar["is_parameter"] = varData.isParameter;
-        j.m_shared->m_json[varName] = stackVar;
+        for (const auto&[varName, varData]: currentStack.stackVariables)
+        {
+            json stackVar = json::object();
+            stackVar["type"] = varData.auxType;
+            stackVar["stack_location"] = varData.stackLocation;
+            stackVar["struct_name"] = varData.structName;
+            stackVar["is_parameter"] = varData.isParameter;
+            j.m_shared->m_json[varName] = stackVar;
+        }
     }
 
     return j;

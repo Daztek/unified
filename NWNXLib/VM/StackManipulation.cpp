@@ -44,7 +44,7 @@ namespace NWNXLib::VM::StackManipulation
 
         stackFrame.functionName = dbg->m_pDebugFunctionNames[functionIdentifier];
 
-        int32_t baseStackLocation = currentStackPointer - (stackSize >> 2);
+        const int32_t baseStackLocation = currentStackPointer - (stackSize >> 2);
         int32_t topMostStackEntry;
         if (dbg->GenerateTypeSize(&dbg->m_pDebugFunctionReturnTypeNames[functionIdentifier]) == 0)
             topMostStackEntry = -1;
@@ -77,14 +77,15 @@ namespace NWNXLib::VM::StackManipulation
                         case '7': return Constants::VMAuxCodeType::EngSt7;
                         case '8': return Constants::VMAuxCodeType::EngSt8;
                         case '9': return Constants::VMAuxCodeType::EngSt9;
+                        default: return Constants::VMAuxCodeType::Invalid;
                     }
                 }
+                default: return Constants::VMAuxCodeType::Invalid;
             }
-
-            return Constants::VMAuxCodeType::Invalid;
         };
 
-        std::function<bool(const CExoString&, int, int, int)> ProcessStructInStruct = [&](const CExoString& parentStr, const int32_t strDef, const int32_t strField, const int32_t strStackLoc) -> bool
+        std::function<bool(const CExoString&, int, int, int, bool)> ProcessStructInStruct =
+            [&](const CExoString& parentStr, const int32_t strDef, const int32_t strField, const int32_t strStackLoc, const bool isParameter) -> bool
         {
             if (dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr()[0] == 't')
             {
@@ -94,18 +95,18 @@ namespace NWNXLib::VM::StackManipulation
                 const CExoString structureVariableName = parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField] + ".";
 
                 stackFrame.stackVariables.emplace_back(parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField],
-                    StackVariable{Constants::VMAuxCodeType::Void, strStackLoc, dbg->m_pDebugStructureNames[structureDefinition], false});
+                    StackVariable{Constants::VMAuxCodeType::Void, strStackLoc, dbg->m_pDebugStructureNames[structureDefinition], isParameter});
 
                 for (int32_t structureField = 0; structureField < structureFields; structureField++)
                 {
                     int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
-                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
+                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation, isParameter))
                     {
                         const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
                         if (auxType != Constants::VMAuxCodeType::Invalid)
                         {
                             stackFrame.stackVariables.emplace_back(structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField],
-                                StackVariable{auxType, structVarStackLocation, "", false});
+                                StackVariable{auxType, structVarStackLocation, "", isParameter});
                         }
                     }
                     currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
@@ -115,7 +116,7 @@ namespace NWNXLib::VM::StackManipulation
             return false;
         };
 
-        auto ProcessStruct = [&dbg, &stackFrame, ProcessStructInStruct](const int32_t debugVariableLocation, const int32_t stackLocation) -> bool
+        auto ProcessStruct = [&dbg, &stackFrame, ProcessStructInStruct](const int32_t debugVariableLocation, const int32_t stackLocation, const bool isParameter) -> bool
         {
             if (dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr()[0] == 't')
             {
@@ -125,18 +126,18 @@ namespace NWNXLib::VM::StackManipulation
                 const CExoString structureVariableName = dbg->m_pDebugVariableNames[debugVariableLocation] + ".";
 
                 stackFrame.stackVariables.emplace_back(dbg->m_pDebugVariableNames[debugVariableLocation],
-                    StackVariable{Constants::VMAuxCodeType::Void, stackLocation, dbg->m_pDebugStructureNames[structureDefinition], false});
+                    StackVariable{Constants::VMAuxCodeType::Void, stackLocation, dbg->m_pDebugStructureNames[structureDefinition], isParameter});
 
                 for (int32_t structureField = 0; structureField < structureFields; structureField++)
                 {
                     int32_t structVarStackLocation = stackLocation + (currentSize >> 2);
-                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation))
+                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation, isParameter))
                     {
                         const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
                         if (auxType != Constants::VMAuxCodeType::Invalid)
                         {
                             stackFrame.stackVariables.emplace_back(structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField],
-                                StackVariable{auxType, structVarStackLocation, "", false});
+                                StackVariable{auxType, structVarStackLocation, "", isParameter});
                         }
                     }
                     currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
@@ -155,7 +156,7 @@ namespace NWNXLib::VM::StackManipulation
             if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
                 topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-            if (!ProcessStruct(debugVariableLocation, stackLocation))
+            if (!ProcessStruct(debugVariableLocation, stackLocation, true))
             {
                 const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugFunctionParamTypeNames[functionIdentifier][parameterCount]);
                 if (auxType != Constants::VMAuxCodeType::Invalid)
@@ -171,7 +172,7 @@ namespace NWNXLib::VM::StackManipulation
             int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
             topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-            if (!ProcessStruct(debugVariableLocation, stackLocation))
+            if (!ProcessStruct(debugVariableLocation, stackLocation, false))
             {
                 const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
                 if (auxType != Constants::VMAuxCodeType::Invalid)
