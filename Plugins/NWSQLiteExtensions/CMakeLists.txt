@@ -2,4 +2,5 @@ add_plugin(NWSQLiteExtensions
     "NWSQLiteExtensions.cpp"
     "CustomFunctions.cpp"
     "TwoDAVirtualTable.cpp"
-    "GOAVirtualTable.cpp")
+    "GOAVirtualTable.cpp"
+    "VMStackVirtualTable.cpp")
