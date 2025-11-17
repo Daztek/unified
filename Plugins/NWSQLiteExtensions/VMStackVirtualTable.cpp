@@ -189,48 +189,48 @@ static int vmsColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
         return SQLITE_OK;
 
     auto *pVM = Globals::VirtualMachine();
-    auto &stackRow = s_VMStackRows[pCursor->currentRow];
+    auto &[depth, function, name, type, stackLocation] = s_VMStackRows[pCursor->currentRow];
 
     switch (column)
     {
         case VMStackColumns::Depth:
-            sqlite3_result_int(ctx, stackRow.depth);
+            sqlite3_result_int(ctx, depth);
         break;
 
         case VMStackColumns::Function:
-            sqlite3_result_text(ctx, stackRow.function.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_result_text(ctx, function.c_str(), -1, SQLITE_TRANSIENT);
         break;
 
         case VMStackColumns::Name:
-            sqlite3_result_text(ctx, stackRow.name.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_result_text(ctx, name.c_str(), -1, SQLITE_TRANSIENT);
         break;
 
         case VMStackColumns::Type:
-            sqlite3_result_int(ctx, stackRow.type);
+            sqlite3_result_int(ctx, type);
         break;
 
         case VMStackColumns::StackLocation:
-            sqlite3_result_int(ctx, stackRow.stackLocation);
+            sqlite3_result_int(ctx, stackLocation);
         break;
 
         case VMStackColumns::Value:
         {
-            switch (stackRow.type)
+            switch (type)
             {
                 case Constants::VMAuxCodeType::Integer:
-                    sqlite3_result_int(ctx, pVM->GetStackIntegerValue(stackRow.stackLocation));
+                    sqlite3_result_int(ctx, pVM->GetStackIntegerValue(stackLocation));
                 break;
 
                 case Constants::VMAuxCodeType::Float:
-                    sqlite3_result_double(ctx, pVM->GetStackFloatValue(stackRow.stackLocation));
+                    sqlite3_result_double(ctx, pVM->GetStackFloatValue(stackLocation));
                 break;
 
                 case Constants::VMAuxCodeType::String:
-                    sqlite3_result_text(ctx, pVM->GetStackStringValue(stackRow.stackLocation).CStr(), -1, SQLITE_TRANSIENT);
+                    sqlite3_result_text(ctx, pVM->GetStackStringValue(stackLocation).CStr(), -1, SQLITE_TRANSIENT);
                 break;
 
                 case Constants::VMAuxCodeType::Object:
-                    sqlite3_result_int(ctx, pVM->GetStackObjectValue(stackRow.stackLocation));
+                    sqlite3_result_int(ctx, pVM->GetStackObjectValue(stackLocation));
                 break;
 
                 default:
