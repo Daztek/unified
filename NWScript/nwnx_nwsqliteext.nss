@@ -23,8 +23,9 @@ int NWNX_NWSQLiteExtensions_CreateVirtual2DATable(string s2DA, string sColumnTyp
 //                  Index 2 is an integer and can be retrieved with GetLocalInt() or GetLocalObject().
 // - nReturnType: One of NWNX_NWSQLITEEXTENSIONS_RETURN_TYPE_*.
 // - bDeterministic: Set to true if repeated calls to the function with the same arguments return the same value.
+// - bDirectOnly: Set to true to only allow the function to be called from top-level sql, eg not in triggers/views.
 // * Returns TRUE if the custom function was successfully registered.
-int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptChunk, int nArgCount, int nReturnType, int bDeterministic);
+int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptChunk, int nArgCount, int nReturnType, int bDeterministic, int bDirectOnly = TRUE);
 
 // Clear the result cache of custom SQLite functions.
 // Should be called before each SQL query that uses them.
@@ -39,8 +40,9 @@ int NWNX_NWSQLiteExtensions_CreateVirtual2DATable(string s2DA, string sColumnTyp
     return NWNXPopInt();
 }
 
-int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptChunk, int nArgCount, int nReturnType, int bDeterministic)
+int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptChunk, int nArgCount, int nReturnType, int bDeterministic, int bDirectOnly = TRUE)
 {
+    NWNXPushInt(bDirectOnly);
     NWNXPushInt(bDeterministic);
     NWNXPushInt(nReturnType);
     NWNXPushInt(nArgCount);

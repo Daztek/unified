@@ -23,6 +23,7 @@ struct CustomFunction
     int32_t argCount;
     ReturnType returnType;
     bool deterministic;
+    bool directOnly;
 };
 
 using ArgValue = std::variant<int32_t, double, std::string>;
@@ -262,6 +263,7 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
         ASSERT_OR_THROW(returnType >= ReturnType::Int);
         ASSERT_OR_THROW(returnType <= ReturnType::Object);
     const bool deterministic = !!args.extract<int32_t>();
+    const bool directOnly = !!args.extract<int32_t>();
 
     if (const auto it = s_customFunctions.find(name); it != s_customFunctions.end())
         return 0;
@@ -272,10 +274,13 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
     function->argCount = argCount;
     function->returnType = static_cast<ReturnType>(returnType);
     function->deterministic = deterministic;
+    function->directOnly = directOnly;
 
-    int flags = SQLITE_UTF8 | SQLITE_DIRECTONLY;
+    int flags = SQLITE_UTF8;
     if (function->deterministic)
         flags |= SQLITE_DETERMINISTIC;
+    if (function->directOnly)
+        flags |= SQLITE_DIRECTONLY;
 
     int rc = sqlite3_create_function_v2(
         Utils::GetModule()->m_sqlite3->connection().get(),
