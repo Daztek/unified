@@ -8,25 +8,50 @@ using namespace NWNXLib::API;
 
 namespace NWNXLib::VM::StackManipulation
 {
-    StackFrame GetStackFrame(int32_t nDepth)
+    static int32_t s_InstrPtrLevelForRecursionLevel[8];
+    static int32_t s_StackPointerForRecursionLevel[8];
+
+    void InitializeHooks()
+    {
+        static Hooks::Hook s_RunScriptFileHook = Hooks::HookFunction(&CVirtualMachine::RunScriptFile,
+        +[](CVirtualMachine *pThis, int32_t nInstructionPointer) -> int32_t
+        {
+            s_StackPointerForRecursionLevel[pThis->m_nRecursionLevel] = pThis->m_cRunTimeStack.GetStackPointer();
+            s_InstrPtrLevelForRecursionLevel[pThis->m_nRecursionLevel] = pThis->m_nInstructPtrLevel;
+            return s_RunScriptFileHook->CallOriginal<int32_t>(pThis, nInstructionPointer);
+        }, Hooks::Order::Early);
+    }
+
+    StackFrame GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
     {
         auto *pVM = Globals::VirtualMachine();
+        int32_t nActualRecursionLevel = pVM->m_nRecursionLevel;
+        if (nRecursionLevel == -1)
+            nRecursionLevel = nActualRecursionLevel;
+
+        pVM->m_nRecursionLevel = nRecursionLevel;
         auto dbg = pVM->GetDebuggerInstance();
+        pVM->m_nRecursionLevel = nActualRecursionLevel;
+
         StackFrame stackFrame;
         stackFrame.depth = nDepth;
+        stackFrame.recursionLevel = nRecursionLevel;
+
+        if (!dbg)
+            return stackFrame;
+
+        int32_t currentStackPointer = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_cRunTimeStack.GetStackPointer() : s_StackPointerForRecursionLevel[nRecursionLevel + 1];
+        int32_t functionCount = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_nInstructPtrLevel : s_InstrPtrLevelForRecursionLevel[nRecursionLevel + 1];
+        int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
+        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,*pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
 
         int32_t finalInstructionPointer;
         if (nDepth == 0)
-            finalInstructionPointer = *pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel];
+            finalInstructionPointer = *pVM->m_pCurrentInstructionPointer[nRecursionLevel];
         else if (nDepth >= 1 && nDepth <= pVM->m_nInstructPtrLevel - 1)
-            finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[pVM->m_nInstructPtrLevel - nDepth];
+            finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[functionCount - nDepth];
         else
             return stackFrame;
-
-        int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
-        int32_t currentStackPointer = pVM->m_cRunTimeStack.GetStackPointer();
-        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,*pVM->m_pCurrentInstructionPointer[pVM->m_nRecursionLevel]);
-        int32_t functionCount = pVM->m_nInstructPtrLevel;
 
         while (nDepth > 0)
         {
@@ -325,9 +350,9 @@ namespace NWNXLib::VM::StackManipulation
     }
 }
 
-VM::StackManipulation::StackFrame CVirtualMachine::GetStackFrame(int32_t nDepth)
+VM::StackManipulation::StackFrame CVirtualMachine::GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
 {
-    return VM::StackManipulation::GetStackFrame(nDepth);
+    return VM::StackManipulation::GetStackFrame(nDepth, nRecursionLevel);
 }
 
 void CVirtualMachine::SetStackIntegerValue(int32_t nStackLocation, int32_t nValue)
