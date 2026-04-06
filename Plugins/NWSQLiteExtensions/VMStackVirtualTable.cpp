@@ -63,7 +63,8 @@ static void PopulateVMStackRows()
                 if (varData.auxType == Constants::VMAuxCodeType::Integer ||
                     varData.auxType == Constants::VMAuxCodeType::Float ||
                     varData.auxType == Constants::VMAuxCodeType::String ||
-                    varData.auxType == Constants::VMAuxCodeType::Object)
+                    varData.auxType == Constants::VMAuxCodeType::Object ||
+                    varData.auxType == Constants::VMAuxCodeType::EngSt7)
                 {
                     s_VMStackRows.emplace_back(VMStackRow{recursionLevel, depth, stackFrame.functionName, varName, varData.auxType, varData.stackLocation});
                 }
@@ -149,7 +150,7 @@ static int vmsConnect(sqlite3 *db, void *pAux, int argc, const char* const *argv
             return SQLITE_NOMEM;
 
         memset(pNewVtab, 0, sizeof(vms_tab));
-        sqlite3_vtab_config(db, SQLITE_VTAB_DIRECTONLY);
+        //sqlite3_vtab_config(db, SQLITE_VTAB_DIRECTONLY);
     }
 
     *ppVtab = reinterpret_cast<sqlite3_vtab*>(pNewVtab);
@@ -243,6 +244,10 @@ static int vmsColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
                     sqlite3_result_int(ctx, pVM->GetStackObjectValue(stackLocation));
                 break;
 
+                case Constants::VMAuxCodeType::EngSt7:
+                    sqlite3_result_text(ctx, pVM->GetStackJsonValue(stackLocation).m_shared->m_json.dump().c_str(), -1, SQLITE_TRANSIENT);
+                break;
+
                 default:
                     LOG_DEBUG("How did this happen?");
                     break;
@@ -294,7 +299,8 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
             return SQLITE_ERROR;
 
         const auto &stackRow = s_VMStackRows[rowId];
-        if (argc > 7 && sqlite3_value_type(argv[7]) != SQLITE_NULL)
+        constexpr int32_t VALUE_ROW = 2 + VMStackColumns::Value;
+        if (argc > VALUE_ROW && sqlite3_value_type(argv[VALUE_ROW]) != SQLITE_NULL)
         {
             auto *pVM = Globals::VirtualMachine();
 
@@ -302,8 +308,8 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
             {
                 case Constants::VMAuxCodeType::Integer:
                 {
-                    if (sqlite3_value_type(argv[7]) == SQLITE_INTEGER)
-                        pVM->SetStackIntegerValue(stackRow.stackLocation, sqlite3_value_int(argv[7]));
+                    if (sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_INTEGER)
+                        pVM->SetStackIntegerValue(stackRow.stackLocation, sqlite3_value_int(argv[VALUE_ROW]));
                     else
                         return SQLITE_MISMATCH;
                     break;
@@ -311,8 +317,8 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
 
                 case Constants::VMAuxCodeType::Float:
                 {
-                    if (sqlite3_value_type(argv[7]) == SQLITE_FLOAT || sqlite3_value_type(argv[7]) == SQLITE_INTEGER)
-                        pVM->SetStackFloatValue(stackRow.stackLocation, sqlite3_value_double(argv[7]));
+                    if (sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_FLOAT || sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_INTEGER)
+                        pVM->SetStackFloatValue(stackRow.stackLocation, sqlite3_value_double(argv[VALUE_ROW]));
                     else
                         return SQLITE_MISMATCH;
                     break;
@@ -320,9 +326,9 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
 
                 case Constants::VMAuxCodeType::String:
                 {
-                    if (sqlite3_value_type(argv[7]) == SQLITE_TEXT)
+                    if (sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_TEXT)
                     {
-                        const auto *text = reinterpret_cast<const char*>(sqlite3_value_text(argv[7]));
+                        const auto *text = reinterpret_cast<const char*>(sqlite3_value_text(argv[VALUE_ROW]));
                         pVM->SetStackStringValue(stackRow.stackLocation, CExoString(text));
                     }
                     else
@@ -332,8 +338,22 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
 
                 case Constants::VMAuxCodeType::Object:
                 {
-                    if (sqlite3_value_type(argv[7]) == SQLITE_INTEGER)
-                        pVM->SetStackObjectValue(stackRow.stackLocation, sqlite3_value_int(argv[7]));
+                    if (sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_INTEGER)
+                        pVM->SetStackObjectValue(stackRow.stackLocation, sqlite3_value_int(argv[VALUE_ROW]));
+                    else
+                        return SQLITE_MISMATCH;
+                    break;
+                }
+
+                case Constants::VMAuxCodeType::EngSt7:
+                {
+                    if (sqlite3_value_type(argv[VALUE_ROW]) == SQLITE_TEXT)
+                    {
+                        const auto *text = reinterpret_cast<const char*>(sqlite3_value_text(argv[VALUE_ROW]));
+                        JsonEngineStructure j;
+                        j.m_shared->m_json = json::parse(text);
+                        pVM->SetStackJsonValue(stackRow.stackLocation, &j);
+                    }
                     else
                         return SQLITE_MISMATCH;
                     break;
