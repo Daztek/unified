@@ -1,1 +1,5 @@
-nwnxlib_add("ReturnTypeExtension.cpp" "StackManipulation.cpp")
+nwnxlib_add(
+"ReturnTypeExtension.cpp"
+"StackManipulation.cpp"
+"FixCompileScriptNDBGeneration.cpp"
+)

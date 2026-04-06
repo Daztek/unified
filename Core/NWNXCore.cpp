@@ -112,6 +112,7 @@ namespace NWNXLib::POS { void InitializeHooks(); }
 namespace NWNXLib::Tasks { void StartAsyncWorkers(); void StopAsyncWorkers(); }
 namespace NWNXLib::VM::ReturnTypeExtension { void InitializeHooks(); void Cleanup(); }
 namespace NWNXLib::VM::StackManipulation { void InitializeHooks(); }
+namespace NWNXLib::VM::FixCompileScriptNDBGeneration { void InitializeHooks(); }
 
 namespace Core {
 
@@ -163,6 +164,7 @@ void NWNXCore::InitialSetupHooks()
     POS::InitializeHooks();
     VM::ReturnTypeExtension::InitializeHooks();
     VM::StackManipulation::InitializeHooks();
+    VM::FixCompileScriptNDBGeneration::InitializeHooks();
 
     static Hooks::Hook loadModuleFinishHook = Hooks::HookFunction(
             &CNWSModule::LoadModuleFinish,
