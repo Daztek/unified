@@ -29,13 +29,16 @@ namespace NWNXLib::VM::StackManipulation
         if (nRecursionLevel == -1)
             nRecursionLevel = nActualRecursionLevel;
 
-        pVM->m_nRecursionLevel = nRecursionLevel;
-        auto dbg = pVM->GetDebuggerInstance();
-        pVM->m_nRecursionLevel = nActualRecursionLevel;
-
         StackFrame stackFrame;
         stackFrame.depth = nDepth;
         stackFrame.recursionLevel = nRecursionLevel;
+
+        if (nRecursionLevel < 0 || nRecursionLevel > nActualRecursionLevel)
+            return stackFrame;
+
+        pVM->m_nRecursionLevel = nRecursionLevel;
+        auto dbg = pVM->GetDebuggerInstance();
+        pVM->m_nRecursionLevel = nActualRecursionLevel;
 
         if (!dbg)
             return stackFrame;
@@ -43,7 +46,14 @@ namespace NWNXLib::VM::StackManipulation
         int32_t currentStackPointer = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_cRunTimeStack.GetStackPointer() : s_StackPointerForRecursionLevel[nRecursionLevel + 1];
         int32_t functionCount = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_nInstructPtrLevel : s_InstrPtrLevelForRecursionLevel[nRecursionLevel + 1];
         int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
-        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,*pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
+
+        if (functionIdentifier == -1)
+        {
+            LOG_ERROR("Bad NDB Data?");
+            return stackFrame;
+        }
+
+        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier, *pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
 
         int32_t finalInstructionPointer;
         if (nDepth == 0)
