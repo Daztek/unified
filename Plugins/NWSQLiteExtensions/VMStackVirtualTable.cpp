@@ -8,6 +8,7 @@ using namespace NWNXLib::API;
 
 struct VMStackRow
 {
+    int32_t recursionLevel;
     int32_t depth;
     std::string function;
     std::string name;
@@ -46,23 +47,26 @@ void VMStackVirtualTable()
 static void PopulateVMStackRows()
 {
     s_VMStackRows.clear();
-    s_VMStackRows.reserve(10);
+    s_VMStackRows.reserve(25);
 
-    for (int32_t depth = 0; depth < 100; depth++)
+    for (int32_t recursionLevel = Globals::VirtualMachine()->m_nRecursionLevel; recursionLevel >= 0; recursionLevel--)
     {
-        auto stackFrame = Globals::VirtualMachine()->GetStackFrame(depth);
-
-        if (!stackFrame.IsValid() || stackFrame.functionName == "#loader" || stackFrame.functionName == "#globals")
-            break;
-
-        for (const auto&[varName, varData] : stackFrame.stackVariables)
+        for (int32_t depth = 0; depth < 128; depth++)
         {
-            if (varData.auxType == Constants::VMAuxCodeType::Integer ||
-                varData.auxType == Constants::VMAuxCodeType::Float ||
-                varData.auxType == Constants::VMAuxCodeType::String ||
-                varData.auxType == Constants::VMAuxCodeType::Object)
+            auto stackFrame = Globals::VirtualMachine()->GetStackFrame(depth, recursionLevel);
+
+            if (!stackFrame.IsValid() || stackFrame.functionName == "#loader" || stackFrame.functionName == "#globals")
+                break;
+
+            for (const auto&[varName, varData] : stackFrame.stackVariables)
             {
-                s_VMStackRows.emplace_back(VMStackRow{depth, stackFrame.functionName, varName, varData.auxType, varData.stackLocation});
+                if (varData.auxType == Constants::VMAuxCodeType::Integer ||
+                    varData.auxType == Constants::VMAuxCodeType::Float ||
+                    varData.auxType == Constants::VMAuxCodeType::String ||
+                    varData.auxType == Constants::VMAuxCodeType::Object)
+                {
+                    s_VMStackRows.emplace_back(VMStackRow{recursionLevel, depth, stackFrame.functionName, varName, varData.auxType, varData.stackLocation});
+                }
             }
         }
     }
@@ -85,7 +89,8 @@ namespace VMStackColumns
 {
     enum TYPE
     {
-        Depth = 0,
+        RecursionLevel = 0,
+        Depth,
         Function,
         Name,
         Type,
@@ -93,7 +98,7 @@ namespace VMStackColumns
         Value,
         Num, // Keep Last
     };
-    constexpr int32_t MAX = 5;
+    constexpr int32_t MAX = 6;
     constexpr int32_t NUM = MAX + 1;
     static_assert(MAX == Value);
     static_assert(NUM == Num);
@@ -102,6 +107,7 @@ namespace VMStackColumns
     {
         constexpr const char* TYPE_STRINGS[] =
         {
+            "recursion_level INTEGER",
             "depth INTEGER",
             "function TEXT",
             "name TEXT",
@@ -189,10 +195,14 @@ static int vmsColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
         return SQLITE_OK;
 
     auto *pVM = Globals::VirtualMachine();
-    auto &[depth, function, name, type, stackLocation] = s_VMStackRows[pCursor->currentRow];
+    auto &[recursionLevel, depth, function, name, type, stackLocation] = s_VMStackRows[pCursor->currentRow];
 
     switch (column)
     {
+        case VMStackColumns::RecursionLevel:
+            sqlite3_result_int(ctx, recursionLevel);
+        break;
+
         case VMStackColumns::Depth:
             sqlite3_result_int(ctx, depth);
         break;
