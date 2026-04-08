@@ -8,8 +8,8 @@ using namespace NWNXLib::API;
 
 namespace NWNXLib::VM::StackManipulation
 {
-    static int32_t s_InstrPtrLevelForRecursionLevel[8];
-    static int32_t s_StackPointerForRecursionLevel[8];
+    static int32_t s_InstrPtrLevelForRecursionLevel[Constants::MAX_RECURSION_LEVEL];
+    static int32_t s_StackPointerForRecursionLevel[Constants::MAX_RECURSION_LEVEL];
 
     void InitializeHooks()
     {
@@ -20,6 +20,71 @@ namespace NWNXLib::VM::StackManipulation
             s_InstrPtrLevelForRecursionLevel[pThis->m_nRecursionLevel] = pThis->m_nInstructPtrLevel;
             return s_RunScriptFileHook->CallOriginal<int32_t>(pThis, nInstructionPointer);
         }, Hooks::Order::Early);
+    }
+
+    static Constants::VMAuxCodeType::TYPE StringTypeToAuxType(const CExoString& stringType)
+    {
+        if (stringType.IsEmpty())
+            return Constants::VMAuxCodeType::Invalid;
+
+        switch (stringType.CStr()[0])
+        {
+            case 'v': return Constants::VMAuxCodeType::Void;
+            case 'i': return Constants::VMAuxCodeType::Integer;
+            case 'f': return Constants::VMAuxCodeType::Float;
+            case 'o': return Constants::VMAuxCodeType::Object;
+            case 's': return Constants::VMAuxCodeType::String;
+            case 'e':
+            {
+                switch (stringType.CStr()[1])
+                {
+                    case '0': return Constants::VMAuxCodeType::EngSt0;
+                    case '1': return Constants::VMAuxCodeType::EngSt1;
+                    case '2': return Constants::VMAuxCodeType::EngSt2;
+                    case '3': return Constants::VMAuxCodeType::EngSt3;
+                    case '4': return Constants::VMAuxCodeType::EngSt4;
+                    case '5': return Constants::VMAuxCodeType::EngSt5;
+                    case '6': return Constants::VMAuxCodeType::EngSt6;
+                    case '7': return Constants::VMAuxCodeType::EngSt7;
+                    case '8': return Constants::VMAuxCodeType::EngSt8;
+                    case '9': return Constants::VMAuxCodeType::EngSt9;
+                    default:  return Constants::VMAuxCodeType::Invalid;
+                }
+            }
+            default: return Constants::VMAuxCodeType::Invalid;
+        }
+    }
+
+    static bool ProcessStruct(const std::shared_ptr<CVirtualMachineDebuggerInstance>& dbg, StackFrame& stackFrame, const CExoString& typeName,
+                              const CExoString& varName, int32_t strStackLoc, bool isParameter)
+    {
+        if (typeName.CStr()[0] != 't')
+            return false;
+
+        const int32_t structureDefinition = atoi(typeName.CStr() + 1);
+        const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
+        int32_t currentSize = 0;
+        const CExoString structureVariableName = varName + ".";
+
+        stackFrame.stackVariables.emplace_back(varName, StackVariable{Constants::VMAuxCodeType::Void, strStackLoc, dbg->m_pDebugStructureNames[structureDefinition], isParameter});
+
+        for (int32_t structureField = 0; structureField < structureFields; structureField++)
+        {
+            int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
+            const CExoString& fieldTypeName = dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField];
+            const CExoString fieldVarName  = structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField];
+
+            if (!ProcessStruct(dbg, stackFrame, fieldTypeName, fieldVarName, structVarStackLocation, isParameter))
+            {
+                const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(fieldTypeName);
+                if (auxType != Constants::VMAuxCodeType::Invalid)
+                {
+                    stackFrame.stackVariables.emplace_back(fieldVarName, StackVariable{auxType, structVarStackLocation, "", isParameter});
+                }
+            }
+            currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
+        }
+        return true;
     }
 
     StackFrame GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
@@ -86,103 +151,8 @@ namespace NWNXLib::VM::StackManipulation
         else
             topMostStackEntry = 0;
 
-        static auto StringTypeToAuxType = [](const CExoString& stringType) -> Constants::VMAuxCodeType::TYPE
-        {
-            if (stringType.IsEmpty())
-                return Constants::VMAuxCodeType::Invalid;
-
-            switch (stringType.CStr()[0])
-            {
-                case 'v': return Constants::VMAuxCodeType::Void;
-                case 'i': return Constants::VMAuxCodeType::Integer;
-                case 'f': return Constants::VMAuxCodeType::Float;
-                case 'o': return Constants::VMAuxCodeType::Object;
-                case 's': return Constants::VMAuxCodeType::String;
-                case 'e':
-                {
-                    switch (stringType.CStr()[1])
-                    {
-                        case '0': return Constants::VMAuxCodeType::EngSt0;
-                        case '1': return Constants::VMAuxCodeType::EngSt1;
-                        case '2': return Constants::VMAuxCodeType::EngSt2;
-                        case '3': return Constants::VMAuxCodeType::EngSt3;
-                        case '4': return Constants::VMAuxCodeType::EngSt4;
-                        case '5': return Constants::VMAuxCodeType::EngSt5;
-                        case '6': return Constants::VMAuxCodeType::EngSt6;
-                        case '7': return Constants::VMAuxCodeType::EngSt7;
-                        case '8': return Constants::VMAuxCodeType::EngSt8;
-                        case '9': return Constants::VMAuxCodeType::EngSt9;
-                        default: return Constants::VMAuxCodeType::Invalid;
-                    }
-                }
-                default: return Constants::VMAuxCodeType::Invalid;
-            }
-        };
-
-        std::function<bool(const CExoString&, int, int, int, bool)> ProcessStructInStruct =
-            [&](const CExoString& parentStr, const int32_t strDef, const int32_t strField, const int32_t strStackLoc, const bool isParameter) -> bool
-        {
-            if (dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr()[0] == 't')
-            {
-                const int32_t structureDefinition = atoi(dbg->m_ppDebugStructureTypeNames[strDef][strField].CStr() + 1);
-                const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
-                int32_t currentSize = 0;
-                const CExoString structureVariableName = parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField] + ".";
-
-                stackFrame.stackVariables.emplace_back(parentStr + dbg->m_ppDebugStructureFieldNames[strDef][strField],
-                    StackVariable{Constants::VMAuxCodeType::Void, strStackLoc, dbg->m_pDebugStructureNames[structureDefinition], isParameter});
-
-                for (int32_t structureField = 0; structureField < structureFields; structureField++)
-                {
-                    int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
-                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation, isParameter))
-                    {
-                        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                        if (auxType != Constants::VMAuxCodeType::Invalid)
-                        {
-                            stackFrame.stackVariables.emplace_back(structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField],
-                                StackVariable{auxType, structVarStackLocation, "", isParameter});
-                        }
-                    }
-                    currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                }
-                return true;
-            }
-            return false;
-        };
-
-        auto ProcessStruct = [&dbg, &stackFrame, ProcessStructInStruct](const int32_t debugVariableLocation, const int32_t stackLocation, const bool isParameter) -> bool
-        {
-            if (dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr()[0] == 't')
-            {
-                const int32_t structureDefinition = atoi(dbg->m_pDebugVariableTypeNames[debugVariableLocation].CStr() + 1);
-                const int32_t structureFields = dbg->m_pDebugStructureFields[structureDefinition];
-                int32_t currentSize = 0;
-                const CExoString structureVariableName = dbg->m_pDebugVariableNames[debugVariableLocation] + ".";
-
-                stackFrame.stackVariables.emplace_back(dbg->m_pDebugVariableNames[debugVariableLocation],
-                    StackVariable{Constants::VMAuxCodeType::Void, stackLocation, dbg->m_pDebugStructureNames[structureDefinition], isParameter});
-
-                for (int32_t structureField = 0; structureField < structureFields; structureField++)
-                {
-                    int32_t structVarStackLocation = stackLocation + (currentSize >> 2);
-                    if (!ProcessStructInStruct(structureVariableName, structureDefinition, structureField, structVarStackLocation, isParameter))
-                    {
-                        const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                        if (auxType != Constants::VMAuxCodeType::Invalid)
-                        {
-                            stackFrame.stackVariables.emplace_back(structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField],
-                                StackVariable{auxType, structVarStackLocation, "", isParameter});
-                        }
-                    }
-                    currentSize += dbg->GenerateTypeSize(&dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField]);
-                }
-                return true;
-            }
-            return false;
-        };
-
-        int32_t debugVariableLocation, totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
+        int32_t debugVariableLocation;
+        int32_t totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
         for (int32_t parameterCount = 0; parameterCount < totalParameters; parameterCount++)
         {
             debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
@@ -191,7 +161,7 @@ namespace NWNXLib::VM::StackManipulation
             if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
                 topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-            if (!ProcessStruct(debugVariableLocation, stackLocation, true))
+            if (!ProcessStruct(dbg, stackFrame, dbg->m_pDebugVariableTypeNames[debugVariableLocation], dbg->m_pDebugVariableNames[debugVariableLocation], stackLocation, true))
             {
                 const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_ppDebugFunctionParamTypeNames[functionIdentifier][parameterCount]);
                 if (auxType != Constants::VMAuxCodeType::Invalid)
@@ -207,7 +177,7 @@ namespace NWNXLib::VM::StackManipulation
             int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
             topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
-            if (!ProcessStruct(debugVariableLocation, stackLocation, false))
+            if (!ProcessStruct(dbg, stackFrame, dbg->m_pDebugVariableTypeNames[debugVariableLocation], dbg->m_pDebugVariableNames[debugVariableLocation], stackLocation, false))
             {
                 const Constants::VMAuxCodeType::TYPE auxType = StringTypeToAuxType(dbg->m_pDebugVariableTypeNames[debugVariableLocation]);
                 if (auxType != Constants::VMAuxCodeType::Invalid)

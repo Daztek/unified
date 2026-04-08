@@ -51,7 +51,7 @@ static void PopulateVMStackRows()
 
     for (int32_t recursionLevel = Globals::VirtualMachine()->m_nRecursionLevel; recursionLevel >= 0; recursionLevel--)
     {
-        for (int32_t depth = 0; depth < 128; depth++)
+        for (int32_t depth = 0; depth < Constants::MAX_DEPTH; depth++)
         {
             auto stackFrame = Globals::VirtualMachine()->GetStackFrame(depth, recursionLevel);
 
@@ -150,7 +150,7 @@ static int vmsConnect(sqlite3 *db, void *pAux, int argc, const char* const *argv
             return SQLITE_NOMEM;
 
         memset(pNewVtab, 0, sizeof(vms_tab));
-        //sqlite3_vtab_config(db, SQLITE_VTAB_DIRECTONLY);
+        sqlite3_vtab_config(db, SQLITE_VTAB_DIRECTONLY);
     }
 
     *ppVtab = reinterpret_cast<sqlite3_vtab*>(pNewVtab);
@@ -351,7 +351,14 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
                     {
                         const auto *text = reinterpret_cast<const char*>(sqlite3_value_text(argv[VALUE_ROW]));
                         JsonEngineStructure j;
-                        j.m_shared->m_json = json::parse(text);
+                        try
+                        {
+                            j.m_shared->m_json = json::parse(text);
+                        }
+                        catch (const json::parse_error&)
+                        {
+                            return SQLITE_ERROR;
+                        }
                         pVM->SetStackJsonValue(stackRow.stackLocation, &j);
                     }
                     else

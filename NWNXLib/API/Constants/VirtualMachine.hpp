@@ -3,6 +3,9 @@
 
 namespace NWNXLib::API::Constants {
 
+constexpr int32_t MAX_RECURSION_LEVEL = 8;
+constexpr int32_t MAX_DEPTH = 128;
+
 // Negative strref
 namespace VMError
 {

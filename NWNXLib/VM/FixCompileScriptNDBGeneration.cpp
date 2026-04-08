@@ -83,14 +83,12 @@ namespace NWNXLib::VM::FixCompileScriptNDBGeneration
                 !pVM->StackPopInteger(&generateNDB))
                 return Constants::VMError::StackUnderflow;
 
-            CResRef resRef = scriptName;
+            const CResRef resRef = scriptName;
             CExoString error;
             s_OutputName = scriptName;
-            int32_t retVal = pVM->m_pJitCompiler->CompileScriptChunk(scriptData, wrapIntoMain != 0);
-            if (retVal != 0)
-            {
+
+            if (int32_t retVal = pVM->m_pJitCompiler->CompileScriptChunk(scriptData, wrapIntoMain != 0); retVal != 0)
                 error = pVM->m_pJitCompiler->m_sCapturedError;
-            }
             else
             {
                 retVal = pVM->m_pJitCompiler->WriteFinalCodeToFile(scriptName);
@@ -108,6 +106,7 @@ namespace NWNXLib::VM::FixCompileScriptNDBGeneration
                     }
                 }
             }
+
             s_OutputName = "!Chunk";
 
             if (!pVM->StackPushString(error))

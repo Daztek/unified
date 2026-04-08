@@ -13,8 +13,7 @@ using namespace NWNXLib::API;
 
 namespace NWNXLib::VM::ReturnTypeExtension
 {
-    constexpr int32_t MAX_RECURSION_LEVELS = 8;
-    static StackElement s_cRunScriptReturnValue[MAX_RECURSION_LEVELS];
+    static StackElement s_cRunScriptReturnValue[Constants::MAX_RECURSION_LEVEL];
 
     void InitializeHooks()
     {
@@ -475,13 +474,13 @@ namespace NWNXLib::VM::ReturnTypeExtension
     uint8_t GetRunScriptReturnValueType()
     {
         auto* pVM = Globals::VirtualMachine();
-        return pVM->m_nRecursionLevel + 1 >= MAX_RECURSION_LEVELS ? 0 : s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType;
+        return pVM->m_nRecursionLevel + 1 >= Constants::MAX_RECURSION_LEVEL ? 0 : s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType;
     }
 
     bool GetRunScriptReturnValueInteger(int32_t* pInteger)
     {
         auto* pVM = Globals::VirtualMachine();
-        if (pVM->m_nRecursionLevel + 1 >= MAX_RECURSION_LEVELS ||
+        if (pVM->m_nRecursionLevel + 1 >= Constants::MAX_RECURSION_LEVEL ||
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType != Constants::VMAuxCodeType::Integer)
         {
             return false;
@@ -493,7 +492,7 @@ namespace NWNXLib::VM::ReturnTypeExtension
     bool GetRunScriptReturnValueFloat(float* pFloat)
     {
         auto* pVM = Globals::VirtualMachine();
-        if (pVM->m_nRecursionLevel + 1 >= MAX_RECURSION_LEVELS ||
+        if (pVM->m_nRecursionLevel + 1 >= Constants::MAX_RECURSION_LEVEL ||
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType != Constants::VMAuxCodeType::Float)
         {
             return false;
@@ -505,7 +504,7 @@ namespace NWNXLib::VM::ReturnTypeExtension
     bool GetRunScriptReturnValueString(CExoString* pString)
     {
         auto* pVM = Globals::VirtualMachine();
-        if (pVM->m_nRecursionLevel + 1 >= MAX_RECURSION_LEVELS ||
+        if (pVM->m_nRecursionLevel + 1 >= Constants::MAX_RECURSION_LEVEL ||
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType != Constants::VMAuxCodeType::String)
         {
             return false;
@@ -517,7 +516,7 @@ namespace NWNXLib::VM::ReturnTypeExtension
     bool GetRunScriptReturnValueObject(ObjectID* pObjectID)
     {
         auto* pVM = Globals::VirtualMachine();
-        if (pVM->m_nRecursionLevel + 1 >= MAX_RECURSION_LEVELS ||
+        if (pVM->m_nRecursionLevel + 1 >= Constants::MAX_RECURSION_LEVEL ||
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType != Constants::VMAuxCodeType::Object)
         {
             return false;
@@ -529,7 +528,7 @@ namespace NWNXLib::VM::ReturnTypeExtension
     bool GetRunScriptReturnValueEngineStructure(int32_t nEngineStructureType, void** pEngst)
     {
         auto* pVM = Globals::VirtualMachine();
-        if (pVM->m_nRecursionLevel + 1 < MAX_RECURSION_LEVELS &&
+        if (pVM->m_nRecursionLevel + 1 < Constants::MAX_RECURSION_LEVEL &&
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType >= Constants::VMAuxCodeType::EngSt0 &&
             s_cRunScriptReturnValue[pVM->m_nRecursionLevel + 1].m_nType <= Constants::VMAuxCodeType::EngSt9)
         {
