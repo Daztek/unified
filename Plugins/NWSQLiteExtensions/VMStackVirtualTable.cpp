@@ -16,6 +16,7 @@ struct VMStackRow
     int32_t stackLocation;
 };
 
+static int32_t s_openCursorCount = 0;
 static std::vector<VMStackRow> s_VMStackRows;
 static bool s_VMStackVirtualTableEnabled = false;
 constexpr const char* MODULE_DATABASE_LABEL = "Module()";
@@ -170,7 +171,9 @@ static int vmsOpen(sqlite3_vtab*, sqlite3_vtab_cursor **ppCursor)
     if(!pCursor) return SQLITE_NOMEM;
     memset(pCursor, 0, sizeof(vms_cursor));
     *ppCursor = &pCursor->base;
-    PopulateVMStackRows();
+    if (s_openCursorCount == 0)
+        PopulateVMStackRows();
+    s_openCursorCount++;
     return SQLITE_OK;
 }
 
@@ -178,6 +181,8 @@ static int vmsClose(sqlite3_vtab_cursor *cur)
 {
     auto *pCursor = reinterpret_cast<vms_cursor*>(cur);
     sqlite3_free(pCursor);
+    if (s_openCursorCount > 0)
+        s_openCursorCount--;
     return SQLITE_OK;
 }
 
