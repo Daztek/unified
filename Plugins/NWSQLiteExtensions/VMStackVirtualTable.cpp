@@ -65,6 +65,7 @@ static void PopulateVMStackRows()
                     varData.auxType == Constants::VMAuxCodeType::Float ||
                     varData.auxType == Constants::VMAuxCodeType::String ||
                     varData.auxType == Constants::VMAuxCodeType::Object ||
+                    varData.auxType == Constants::VMAuxCodeType::EngSt5 ||
                     varData.auxType == Constants::VMAuxCodeType::EngSt7)
                 {
                     s_VMStackRows.emplace_back(VMStackRow{recursionLevel, depth, stackFrame.functionName, varName, varData.auxType, varData.stackLocation});
@@ -249,6 +250,10 @@ static int vmsColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int column)
                     sqlite3_result_int(ctx, pVM->GetStackObjectValue(stackLocation));
                 break;
 
+                case Constants::VMAuxCodeType::EngSt5:
+                    sqlite3_result_text(ctx, pVM->GetStackSqlQueryValue(stackLocation).m_shared->m_query.CStr(), -1, SQLITE_TRANSIENT);
+                break;
+
                 case Constants::VMAuxCodeType::EngSt7:
                     sqlite3_result_text(ctx, pVM->GetStackJsonValue(stackLocation).m_shared->m_json.dump().c_str(), -1, SQLITE_TRANSIENT);
                 break;
@@ -349,6 +354,10 @@ static int vmsUpdate(sqlite3_vtab*, int argc, sqlite3_value **argv, sqlite_int64
                         return SQLITE_MISMATCH;
                     break;
                 }
+
+                case Constants::VMAuxCodeType::EngSt5:
+                    return SQLITE_READONLY; // How would this even work :)
+                break;
 
                 case Constants::VMAuxCodeType::EngSt7:
                 {
