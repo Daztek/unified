@@ -218,3 +218,17 @@ NWNX_EXPORT ArgumentStack GetStackJsonValue(ArgumentStack&& args)
     const auto stackLocation = args.extract<int32_t>();
     return Globals::VirtualMachine()->GetStackJsonValue(stackLocation);
 }
+
+NWNX_EXPORT ArgumentStack SetStackSqlQueryValue(ArgumentStack&& args)
+{
+    const auto stackLocation = args.extract<int32_t>();
+    auto value = args.extract<SqlQueryEngineStructure>();
+    Globals::VirtualMachine()->SetStackSqlQueryValue(stackLocation, &value);
+    return {};
+}
+
+NWNX_EXPORT ArgumentStack GetStackSqlQueryValue(ArgumentStack&& args)
+{
+    const auto stackLocation = args.extract<int32_t>();
+    return Globals::VirtualMachine()->GetStackSqlQueryValue(stackLocation);
+}

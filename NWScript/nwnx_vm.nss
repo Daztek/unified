@@ -120,6 +120,16 @@ void NWNX_VM_SetStackJsonValue(int nStackLocation, json jValue);
 // * Returns the value of the json or JsonNull() on error.
 json NWNX_VM_GetStackJsonValue(int nStackLocation);
 
+// Set the sqlquery value at nStackLocation to sqlValue.
+// - nStackLocation: The location of the sqlquery on the stack.
+// - sqlValue: The value to set the sqlquery to.
+void NWNX_VM_SetStackSqlQueryValue(int nStackLocation, json sqlValue);
+
+// Get the sqlquery value at nStackLocation.
+// - nStackLocation: The location of the sqlquery on the stack.
+// * Returns the value of the sqlquery or an empty query on error.
+sqlquery NWNX_VM_GetStackSqlQueryValue(int nStackLocation);
+
 int NWNX_VM_GetScriptReturnValueType()
 {
     NWNXCall(NWNX_VM, "GetScriptReturnValueType");
@@ -270,4 +280,18 @@ json NWNX_VM_GetStackJsonValue(int nStackLocation)
     NWNXPushInt(nStackLocation);
     NWNXCall(NWNX_VM, "GetStackJsonValue");
     return NWNXPopJson();
+}
+
+void NWNX_VM_SetStackSqlQueryValue(int nStackLocation, sqlquery sqlValue)
+{
+    NWNXPushSqlquery(sqlValue);
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "SetStackSqlQueryValue");
+}
+
+sqlquery NWNX_VM_GetStackSqlQueryValue(int nStackLocation)
+{
+    NWNXPushInt(nStackLocation);
+    NWNXCall(NWNX_VM, "GetStackSqlQueryValue");
+    return NWNXPopSqlquery();
 }
