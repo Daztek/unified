@@ -253,4 +253,6 @@ struct CNetConnectionId : public DistinctSimpleType<uint32_t>
     CScriptLocation GetStackLocationValue(int32_t nStackLocation);                                                          \
     void SetStackJsonValue(int32_t nStackLocation, JsonEngineStructure* jValue);                                            \
     JsonEngineStructure GetStackJsonValue(int32_t nStackLocation);                                                          \
+    void SetStackSqlQueryValue(int32_t nStackLocation, SqlQueryEngineStructure* sqlValue);                                  \
+    SqlQueryEngineStructure GetStackSqlQueryValue(int32_t nStackLocation);                                                  \
 

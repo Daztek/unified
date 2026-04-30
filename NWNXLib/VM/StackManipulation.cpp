@@ -328,6 +328,33 @@ namespace NWNXLib::VM::StackManipulation
         }
         return JsonEngineStructure{};
     }
+
+    void SetStackSqlQueryValue(int32_t nStackLocation, SqlQueryEngineStructure* sqlValue)
+    {
+        if (nStackLocation >= 0 && nStackLocation < Globals::VirtualMachine()->m_cRunTimeStack.m_nTotalSize)
+        {
+            auto &stackNode = Globals::VirtualMachine()->m_cRunTimeStack.GetStackNode(nStackLocation);
+            if (stackNode.m_nType == StackElement::ENGST5)
+            {
+                StackElement tempStack;
+                tempStack.Init(StackElement::ENGST5);
+                tempStack.m_pStackPtr = sqlValue;
+                stackNode.Clear(Globals::VirtualMachine()->m_pCmdImplementer);
+                stackNode.CopyFrom(tempStack, Globals::VirtualMachine()->m_pCmdImplementer);
+            }
+        }
+    }
+
+    SqlQueryEngineStructure GetStackSqlQueryValue(int32_t nStackLocation)
+    {
+        if (nStackLocation >= 0 && nStackLocation < Globals::VirtualMachine()->m_cRunTimeStack.m_nTotalSize)
+        {
+            auto &stackNode = Globals::VirtualMachine()->m_cRunTimeStack.GetStackNode(nStackLocation);
+            if (stackNode.m_nType == StackElement::ENGST5)
+                return *static_cast<SqlQueryEngineStructure*>(stackNode.m_pStackPtr);
+        }
+        return SqlQueryEngineStructure{};
+    }
 }
 
 VM::StackManipulation::StackFrame CVirtualMachine::GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
@@ -393,4 +420,14 @@ void CVirtualMachine::SetStackJsonValue(int32_t nStackLocation, JsonEngineStruct
 JsonEngineStructure CVirtualMachine::GetStackJsonValue(int32_t nStackLocation)
 {
     return VM::StackManipulation::GetStackJsonValue(nStackLocation);
+}
+
+void CVirtualMachine::SetStackSqlQueryValue(int32_t nStackLocation, SqlQueryEngineStructure* sqlValue)
+{
+    VM::StackManipulation::SetStackSqlQueryValue(nStackLocation, sqlValue);
+}
+
+SqlQueryEngineStructure CVirtualMachine::GetStackSqlQueryValue(int32_t nStackLocation)
+{
+    return VM::StackManipulation::GetStackSqlQueryValue(nStackLocation);
 }
