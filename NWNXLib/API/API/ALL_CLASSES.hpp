@@ -312,3 +312,4 @@ struct CResGFF;
 struct NWVMachineUtils;
 struct CNWSItemPropertyHandler;
 struct JsonEngineStructure;
+struct SqlQueryEngineStructure;

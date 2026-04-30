@@ -3,6 +3,7 @@
 #include "API/API/CGameEffect.hpp"
 #include "API/API/JsonEngineStructure.hpp"
 #include "API/API/CScriptLocation.hpp"
+#include "API/API/SqlQueryEngineStructure.hpp"
 
 #include <deque>
 #include <stdexcept>
@@ -27,6 +28,7 @@ constexpr bool is_argument_type()
          || std::is_same_v<T, CScriptLocation>
          || std::is_same_v<T, CGameEffect*>
          || std::is_same_v<T, JsonEngineStructure>
+         || std::is_same_v<T, SqlQueryEngineStructure>
          || std::is_same_v<T, NullArgument>);
 }
 
@@ -43,7 +45,8 @@ struct ScriptVariant
         Vector,
         CScriptLocation,
         CGameEffect*,
-        JsonEngineStructure>;
+        JsonEngineStructure,
+        SqlQueryEngineStructure>;
     Variant m_data;
 
     // Constructors
@@ -91,6 +94,7 @@ struct ScriptVariant
             return e ? std::string("EffectID:") + std::to_string(e->m_nID) : std::string("nullptr effect");
         }
         else if (Holds<JsonEngineStructure>()) { return std::string("JSON: ") + Get<JsonEngineStructure>().m_shared->m_json.dump(); }
+        else if (Holds<SqlQueryEngineStructure>()) { return std::string("SQL: ") + Get<SqlQueryEngineStructure>().m_shared->m_query.CStr(); }
         return "(unknown argument type)";
     }
 

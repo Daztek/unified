@@ -131,6 +131,16 @@ int32_t NWNXCore::NWNXFunctionManagementHandler(CNWSVirtualMachineCommands* this
             break;
         }
 
+        case VMCommand::NWNXPushSqlquery:
+        {
+            SqlQueryEngineStructure *sql = nullptr;
+            SCOPEGUARD(delete sql);
+            if (!pVirtualMachine->StackPopEngineStructure(VMStructure::SQLQuery, (void**)&sql))
+                return VMError::StackUnderflow;
+            ScriptAPI::Push(*sql);
+            break;
+        }
+
         case VMCommand::NWNXPopInt:
         {
             if (!pVirtualMachine->StackPushInteger(ScriptAPI::Pop<int32_t>().value_or(0)))
@@ -200,6 +210,14 @@ int32_t NWNXCore::NWNXFunctionManagementHandler(CNWSVirtualMachineCommands* this
         {
             JsonEngineStructure j = ScriptAPI::Pop<JsonEngineStructure>().value_or(JsonEngineStructure{});
             if (!pVirtualMachine->StackPushEngineStructure(VMStructure::Json, &j))
+                return VMError::StackOverflow;
+            break;
+        }
+
+        case VMCommand::NWNXPopSqlquery:
+        {
+            SqlQueryEngineStructure sql = ScriptAPI::Pop<SqlQueryEngineStructure>().value_or(SqlQueryEngineStructure{});
+            if (!pVirtualMachine->StackPushEngineStructure(VMStructure::SQLQuery, &sql))
                 return VMError::StackOverflow;
             break;
         }
