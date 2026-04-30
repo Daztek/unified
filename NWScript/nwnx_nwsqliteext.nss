@@ -27,6 +27,11 @@ int NWNX_NWSQLiteExtensions_CreateVirtual2DATable(string s2DA, string sColumnTyp
 // * Returns TRUE if the custom function was successfully registered.
 int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptChunk, int nArgCount, int nReturnType, int bDeterministic, int bDirectOnly = TRUE);
 
+// Unregister a custom SQlite function.
+// - sName: The name of the function.
+// * Returns TRUE if the custom function was successfully unregistered.
+int NWNX_NWSQLiteExtensions_UnregisterCustomFunction(string sName);
+
 // Clear the result cache of custom SQLite functions.
 // Should be called before each SQL query that uses them.
 void NWNX_NWSQLiteExtensions_ClearFunctionResultCache();
@@ -49,6 +54,13 @@ int NWNX_NWSQLiteExtensions_RegisterCustomFunction(string sName, string sScriptC
     NWNXPushString(sScriptChunk);
     NWNXPushString(sName);
     NWNXCall(NWNX_NWSQLiteExtensions, "RegisterCustomFunction");
+    return NWNXPopInt();
+}
+
+int NWNX_NWSQLiteExtensions_UnregisterCustomFunction(string sName)
+{
+    NWNXPushString(sName);
+    NWNXCall(NWNX_NWSQLiteExtensions, "UnregisterCustomFunction");
     return NWNXPopInt();
 }
 

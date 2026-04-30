@@ -18,8 +18,9 @@ enum ReturnType
 
 struct CustomFunction
 {
+    std::string name;
+    size_t nameHash;
     std::string scriptChunk;
-    int32_t functionHash;
     int32_t argCount;
     ReturnType returnType;
     bool deterministic;
@@ -29,12 +30,13 @@ struct CustomFunction
 using ArgValue = std::variant<int32_t, double, std::string>;
 struct CacheKey
 {
-    int32_t functionHash;
+    std::string name;
+    size_t nameHash;
     std::vector<ArgValue> args;
 
     bool operator==(const CacheKey& other) const
     {
-        return functionHash == other.functionHash && args == other.args;
+        return nameHash == other.nameHash && args == other.args && name == other.name;
     }
 };
 
@@ -42,22 +44,19 @@ struct CacheKeyHash
 {
     std::size_t operator()(const CacheKey& key) const
     {
-        constexpr std::size_t FNV_OFFSET_BASIS = 14695981039346656037ULL;
         constexpr std::size_t FNV_PRIME = 1099511628211ULL;
-        std::size_t hash = FNV_OFFSET_BASIS;
-        std::size_t funcHash = std::hash<int32_t>{}(key.functionHash);
-        hash ^= funcHash;
-        hash *= FNV_PRIME;
+        std::size_t hash = 14695981039346656037ULL;
 
+        auto mix = [&](std::size_t v) {
+            hash ^= v;
+            hash *= FNV_PRIME;
+        };
+
+        mix(key.nameHash);
         for (const auto& arg : key.args)
         {
-            std::size_t argHash = std::visit([](auto&& val)
-            {
-                return std::hash<std::decay_t<decltype(val)>>{}(val);
-            }, arg);
-
-            hash ^= argHash;
-            hash *= FNV_PRIME;
+            mix(arg.index());
+            mix(std::visit([](auto&& val) { return std::hash<std::decay_t<decltype(val)>>{}(val); }, arg));
         }
 
         return hash;
@@ -97,7 +96,7 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
     const int expectedArgCount = pCustomFunction->argCount + 1;
     if (argc != expectedArgCount)
     {
-        SetSqliteError(context, "Argument count mismatch: expected %d, got %d", expectedArgCount, argc);
+        SetSqliteError(context, "Argument count mismatch: expected %d, got %d (function: %s)", expectedArgCount, argc, pCustomFunction->name.c_str());
         return;
     }
 
@@ -117,7 +116,7 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
                 args.emplace_back(sqlite3_value_double(argv[i]));
                 break;
             default:
-                SetSqliteError(context, "Unsupported argument type %d at position %d", argType, i + 1);
+                SetSqliteError(context, "Unsupported argument type %d at position %d (function: %s)", argType, i + 1, pCustomFunction->name.c_str());
                 return;
         }
     }
@@ -125,7 +124,7 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
     std::optional<CacheKey> cacheKey;
     if (pCustomFunction->deterministic)
     {
-        cacheKey = CacheKey{pCustomFunction->functionHash, args};
+        cacheKey = CacheKey{pCustomFunction->name, pCustomFunction->nameHash, args};
         if (const auto it = s_resultCache.find(*cacheKey); it != s_resultCache.end())
         {
             std::visit([&](const auto& val)
@@ -178,8 +177,8 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
 
     if (pVM->RunScriptChunk(pCustomFunction->scriptChunk.c_str(), oidSelf, oidSelf != Constants::OBJECT_INVALID, false))
     {
-        SetSqliteError(context, "Script execution failed for function hash %d with error: %s",
-            pCustomFunction->functionHash, pVM->m_pJitCompiler->m_sCapturedError.CStr());
+        SetSqliteError(context, "Script execution failed for function '%s' with error: %s",
+            pCustomFunction->name.c_str(), pVM->m_pJitCompiler->m_sCapturedError.CStr());
         return;
     }
 
@@ -201,7 +200,7 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
             return;
         }
 
-        SetSqliteError(context, "Failed to retrieve integer return value from script (hash: %d)", pCustomFunction->functionHash);
+        SetSqliteError(context, "Failed to retrieve integer return value from script (function: %s)", pCustomFunction->name.c_str());
         return;
     }
 
@@ -210,12 +209,12 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
         float retVal;
         if (pVM->GetRunScriptReturnValueFloat(&retVal))
         {
-            storeInCache(retVal);
+            storeInCache(static_cast<double>(retVal));
             sqlite3_result_double(context, retVal);
             return;
         }
 
-        SetSqliteError(context, "Failed to retrieve float return value from script (hash: %d)", pCustomFunction->functionHash);
+        SetSqliteError(context, "Failed to retrieve float return value from script (function: %s)", pCustomFunction->name.c_str());
         return;
     }
 
@@ -224,12 +223,12 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
         CExoString retVal;
         if (pVM->GetRunScriptReturnValueString(&retVal))
         {
-            storeInCache(retVal);
+            storeInCache(std::string(retVal.CStr()));
             sqlite3_result_text(context, retVal.CStr(), -1, SQLITE_TRANSIENT);
             return;
         }
 
-        SetSqliteError(context, "Failed to retrieve string return value from script (hash: %d)", pCustomFunction->functionHash);
+        SetSqliteError(context, "Failed to retrieve string return value from script (function: %s)", pCustomFunction->name.c_str());
         return;
     }
 
@@ -244,24 +243,24 @@ static void CustomFunctionCallback(sqlite3_context* context, int argc, sqlite3_v
             return;
         }
 
-        SetSqliteError(context, "Failed to retrieve object return value from script (hash: %d)", pCustomFunction->functionHash);
+        SetSqliteError(context, "Failed to retrieve object return value from script (function: %s)", pCustomFunction->name.c_str());
         return;
     }
 
-    SetSqliteError(context, "Return type mismatch? (function hash: %d)", pCustomFunction->functionHash);
+    SetSqliteError(context, "Return type mismatch? (function: %s)", pCustomFunction->name.c_str());
 }
 
 NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
 {
     const auto name = args.extract<std::string>();
-        ASSERT_OR_THROW(!name.empty());
+      ASSERT_OR_THROW(!name.empty());
     const auto scriptChunk = args.extract<std::string>();
-        ASSERT_OR_THROW(!scriptChunk.empty());
+      ASSERT_OR_THROW(!scriptChunk.empty());
     const auto argCount = args.extract<int32_t>();
-        ASSERT_OR_THROW(argCount >= 0);
+      ASSERT_OR_THROW(argCount >= 0);
     auto returnType = args.extract<int32_t>();
-        ASSERT_OR_THROW(returnType >= ReturnType::Int);
-        ASSERT_OR_THROW(returnType <= ReturnType::Object);
+      ASSERT_OR_THROW(returnType >= ReturnType::Int);
+      ASSERT_OR_THROW(returnType <= ReturnType::Object);
     const bool deterministic = !!args.extract<int32_t>();
     const bool directOnly = !!args.extract<int32_t>();
 
@@ -269,8 +268,9 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
         return 0;
 
     auto function = std::make_unique<CustomFunction>();
+    function->name = name;
+    function->nameHash = std::hash<std::string>{}(name);
     function->scriptChunk = scriptChunk;
-    function->functionHash = CExoString(scriptChunk).GetHash();
     function->argCount = argCount;
     function->returnType = static_cast<ReturnType>(returnType);
     function->deterministic = deterministic;
@@ -282,7 +282,7 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
     if (function->directOnly)
         flags |= SQLITE_DIRECTONLY;
 
-    int rc = sqlite3_create_function_v2(
+    const int rc = sqlite3_create_function_v2(
         Utils::GetModule()->m_sqlite3->connection().get(),
         name.c_str(),
         1 + argCount,
@@ -297,6 +297,34 @@ NWNX_EXPORT ArgumentStack RegisterCustomFunction(ArgumentStack&& args)
         return 0;
 
     s_customFunctions[name] = std::move(function);
+
+    return 1;
+}
+
+NWNX_EXPORT ArgumentStack UnregisterCustomFunction(ArgumentStack&& args)
+{
+    const auto name = args.extract<std::string>();
+      ASSERT_OR_THROW(!name.empty());
+
+    const auto it = s_customFunctions.find(name);
+    if (it == s_customFunctions.end())
+        return 0;
+
+    const int rc = sqlite3_create_function_v2(
+        Utils::GetModule()->m_sqlite3->connection().get(),
+        name.c_str(),
+        1 + it->second->argCount,
+        SQLITE_UTF8,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr);
+
+    if (rc != SQLITE_OK)
+        return 0;
+
+    s_customFunctions.erase(it);
 
     return 1;
 }
