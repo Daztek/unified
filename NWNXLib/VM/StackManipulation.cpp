@@ -70,9 +70,9 @@ namespace NWNXLib::VM::StackManipulation
 
         for (int32_t structureField = 0; structureField < structureFields; structureField++)
         {
-            int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
+            const int32_t structVarStackLocation = strStackLoc + (currentSize >> 2);
             const CExoString& fieldTypeName = dbg->m_ppDebugStructureTypeNames[structureDefinition][structureField];
-            const CExoString fieldVarName  = structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField];
+            const CExoString fieldVarName = structureVariableName + dbg->m_ppDebugStructureFieldNames[structureDefinition][structureField];
 
             if (!ProcessStruct(dbg, stackFrame, fieldTypeName, fieldVarName, structVarStackLocation, isParameter))
             {
@@ -90,7 +90,7 @@ namespace NWNXLib::VM::StackManipulation
     StackFrame GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
     {
         auto *pVM = Globals::VirtualMachine();
-        int32_t nActualRecursionLevel = pVM->m_nRecursionLevel;
+        const int32_t nActualRecursionLevel = pVM->m_nRecursionLevel;
         if (nRecursionLevel == -1)
             nRecursionLevel = nActualRecursionLevel;
 
@@ -102,15 +102,16 @@ namespace NWNXLib::VM::StackManipulation
             return stackFrame;
 
         pVM->m_nRecursionLevel = nRecursionLevel;
-        auto dbg = pVM->GetDebuggerInstance();
+        const auto dbg = pVM->GetDebuggerInstance();
         pVM->m_nRecursionLevel = nActualRecursionLevel;
 
         if (!dbg)
             return stackFrame;
 
+        const int32_t currentInstructionPointer = *pVM->m_pCurrentInstructionPointer[nRecursionLevel];
         int32_t currentStackPointer = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_cRunTimeStack.GetStackPointer() : s_StackPointerForRecursionLevel[nRecursionLevel + 1];
         int32_t functionCount = (nRecursionLevel == nActualRecursionLevel) ? pVM->m_nInstructPtrLevel : s_InstrPtrLevelForRecursionLevel[nRecursionLevel + 1];
-        int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(*pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
+        int32_t functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(currentInstructionPointer);
 
         if (functionIdentifier == -1)
         {
@@ -118,11 +119,11 @@ namespace NWNXLib::VM::StackManipulation
             return stackFrame;
         }
 
-        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier, *pVM->m_pCurrentInstructionPointer[nRecursionLevel]);
+        int32_t stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier, currentInstructionPointer);
 
         int32_t finalInstructionPointer;
         if (nDepth == 0)
-            finalInstructionPointer = *pVM->m_pCurrentInstructionPointer[nRecursionLevel];
+            finalInstructionPointer = currentInstructionPointer;
         else if (nDepth >= 1 && nDepth <= pVM->m_nInstructPtrLevel - 1)
             finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[functionCount - nDepth];
         else
@@ -133,7 +134,7 @@ namespace NWNXLib::VM::StackManipulation
             --nDepth;
             --functionCount;
             currentStackPointer -= (stackSize >> 2);
-            int32_t runTimePtr = pVM->m_pnRunTimeInstructPtr[functionCount];
+            const int32_t runTimePtr = pVM->m_pnRunTimeInstructPtr[functionCount];
             functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(runTimePtr);
             if (functionIdentifier != -1)
                 stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,runTimePtr);
@@ -151,12 +152,11 @@ namespace NWNXLib::VM::StackManipulation
         else
             topMostStackEntry = 0;
 
-        int32_t debugVariableLocation;
-        int32_t totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
+        const int32_t totalParameters = dbg->m_pDebugFunctionParameters[functionIdentifier];
         for (int32_t parameterCount = 0; parameterCount < totalParameters; parameterCount++)
         {
-            debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
-            int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
+            const int32_t debugVariableLocation = dbg->GenerateDebugVariableLocationForParameter(functionIdentifier, parameterCount);
+            const int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
 
             if (dbg->m_pDebugVariableStackLocation[debugVariableLocation] > topMostStackEntry)
                 topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
@@ -171,10 +171,10 @@ namespace NWNXLib::VM::StackManipulation
             }
         }
 
-        debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
+        int32_t debugVariableLocation = dbg->GetNextDebugVariable(functionIdentifier, finalInstructionPointer, topMostStackEntry);
         while (debugVariableLocation != -1)
         {
-            int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
+            const int32_t stackLocation = baseStackLocation + (dbg->m_pDebugVariableStackLocation[debugVariableLocation] >> 2);
             topMostStackEntry = dbg->m_pDebugVariableStackLocation[debugVariableLocation];
 
             if (!ProcessStruct(dbg, stackFrame, dbg->m_pDebugVariableTypeNames[debugVariableLocation], dbg->m_pDebugVariableNames[debugVariableLocation], stackLocation, false))
