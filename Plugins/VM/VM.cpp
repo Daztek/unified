@@ -135,6 +135,25 @@ NWNX_EXPORT ArgumentStack GetStackVariables(ArgumentStack&& args)
     return j;
 }
 
+NWNX_EXPORT ArgumentStack GetStackVariable(ArgumentStack&& args)
+{
+    const auto varName = args.extract<std::string>();
+      ASSERT_OR_THROW(!varName.empty());
+    const auto depth = args.extract<int32_t>();
+      ASSERT_OR_THROW(depth >= 0);
+
+    if (const auto currentStack = Globals::VirtualMachine()->GetStackFrame(depth); currentStack.IsValid())
+    {
+        for (const auto&[stackvarName, stackvarData]: currentStack.stackVariables)
+        {
+            if (stackvarName == varName)
+                return {stackvarData.auxType, stackvarData.stackLocation, stackvarData.structName};
+        }
+    }
+
+    return {Constants::VMAuxCodeType::Invalid, 0, ""};
+}
+
 NWNX_EXPORT ArgumentStack SetStackIntegerValue(ArgumentStack&& args)
 {
     const auto stackLocation = args.extract<int32_t>();

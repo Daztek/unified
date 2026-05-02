@@ -20,6 +20,13 @@ const string NWNX_VM_STRUCT_NAME_KEY    = "struct_name";
 const string NWNX_VM_TYPE_KEY           = "type";
 const string NWNX_VM_STACK_LOCATION_KEY = "stack_location";
 
+struct NWNX_VM_StackVariable
+{
+    int nAuxType;
+    int nStackLocation;
+    string sStructName;
+};
+
 // Get the return value type of the last script executed with ExecuteScript() or ExecuteScriptChunk().
 // Returns a NWNX_VM_AUXTYPE_*
 int NWNX_VM_GetScriptReturnValueType();
@@ -58,7 +65,13 @@ int NWNX_VM_GetScriptParamSet(string sParamName);
 // Get the current stack variables at nDepth.
 // - nDepth: 0 = current function, 1 = calling function etc.
 // * Returns a json object that has visible variable names as keys with json objects that contain the type and stack location.
-json NWNX_VM_GetStackVariables(int nDepth);
+json NWNX_VM_GetStackVariables(int nDepth = 0);
+
+// Get the stack info of sVarName at nDepth.
+// - sVarName: the name of a variable.
+// - nDepth: 0 = current function, 1 = calling function etc.
+// * Returns a NWNX_VM_StackVariable struct, on error nAuxType will be NWNX_VM_AUXTYPE_INVALID.
+struct NWNX_VM_StackVariable NWNX_VM_GetStackVariable(string sVarName, int nDepth = 0);
 
 // Set the integer value at nStackLocation to nValue.
 // - nStackLocation: The location of the integer on the stack.
@@ -123,7 +136,7 @@ json NWNX_VM_GetStackJsonValue(int nStackLocation);
 // Set the sqlquery value at nStackLocation to sqlValue.
 // - nStackLocation: The location of the sqlquery on the stack.
 // - sqlValue: The value to set the sqlquery to.
-void NWNX_VM_SetStackSqlQueryValue(int nStackLocation, json sqlValue);
+void NWNX_VM_SetStackSqlQueryValue(int nStackLocation, sqlquery sqlValue);
 
 // Get the sqlquery value at nStackLocation.
 // - nStackLocation: The location of the sqlquery on the stack.
@@ -191,11 +204,23 @@ int NWNX_VM_GetScriptParamSet(string sParamName)
     return NWNXPopInt();
 }
 
-json NWNX_VM_GetStackVariables(int nDepth)
+json NWNX_VM_GetStackVariables(int nDepth = 0)
 {
-    NWNXPushInt(nDepth);
+    NWNXPushInt(1 + nDepth);
     NWNXCall(NWNX_VM, "GetStackVariables");
     return NWNXPopJson();
+}
+
+struct NWNX_VM_StackVariable NWNX_VM_GetStackVariable(string sVarName, int nDepth = 0)
+{
+    NWNXPushInt(1 + nDepth);
+    NWNXPushString(sVarName);
+    NWNXCall(NWNX_VM, "GetStackVariable");
+    struct NWNX_VM_StackVariable str;
+    str.sStructName = NWNXPopString();
+    str.nStackLocation = NWNXPopInt();
+    str.nAuxType = NWNXPopInt();
+    return str;
 }
 
 void NWNX_VM_SetStackIntegerValue(int nStackLocation, int nValue)
