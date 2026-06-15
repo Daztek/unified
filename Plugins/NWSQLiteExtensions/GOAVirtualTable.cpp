@@ -107,6 +107,13 @@ enum FilterFlags : int
     TagLike = 8
 };
 
+struct FilterConstraints
+{
+    int flag;
+    int column;
+    int op;
+};
+
 static int goaConnect(sqlite3 *db, void *pAux, int argc, const char* const *argv, sqlite3_vtab **ppVtab, char **pzErr)
 {
     (void)pAux; (void)argc; (void)argv; (void)pzErr;
@@ -155,6 +162,17 @@ static int goaClose(sqlite3_vtab_cursor *cur)
     return SQLITE_OK;
 }
 
+static const char* GetObjectTag(CGameObject *pGameObject)
+{
+    if (auto *pObject = Utils::AsNWSObject(pGameObject))
+        return pObject->m_sTag.CStr();
+    if (auto *pArea = Utils::AsNWSArea(pGameObject))
+        return pArea->m_sTag.CStr();
+    if (auto *pModule = Utils::AsNWSModule(pGameObject))
+        return pModule->m_sTag.CStr();
+    return nullptr;
+}
+
 static bool goaObjectPassesFilters(goa_cursor *pCursor, CGameObject *pGameObject)
 {
     if (!pGameObject)
@@ -178,28 +196,14 @@ static bool goaObjectPassesFilters(goa_cursor *pCursor, CGameObject *pGameObject
 
     if (pCursor->tagEQFilterActive)
     {
-        const char* tag = nullptr;
-        if (auto *pObject = Utils::AsNWSObject(pGameObject))
-            tag = pObject->m_sTag.CStr();
-        else if (auto *pArea = Utils::AsNWSArea(pGameObject))
-            tag = pArea->m_sTag.CStr();
-        else if (auto *pModule = Utils::AsNWSModule(pGameObject))
-            tag = pModule->m_sTag.CStr();
-
+        const char* tag = GetObjectTag(pGameObject);
         if (!tag || strcmp(tag, pCursor->tagEQFilter) != 0)
             return false;
     }
 
     if (pCursor->tagLikeFilterActive)
     {
-        const char* tag = nullptr;
-        if (auto *pObject = Utils::AsNWSObject(pGameObject))
-            tag = pObject->m_sTag.CStr();
-        else if (auto *pArea = Utils::AsNWSArea(pGameObject))
-            tag = pArea->m_sTag.CStr();
-        else if (auto *pModule = Utils::AsNWSModule(pGameObject))
-            tag = pModule->m_sTag.CStr();
-
+        const char* tag = GetObjectTag(pGameObject);
         if (!tag || sqlite3_strlike(pCursor->tagLikeFilter, tag, 0) != 0)
             return false;
     }
@@ -313,18 +317,23 @@ static int goaEOF(sqlite3_vtab_cursor *cur)
            (pCursor->currentObjectId >= Constants::MINCHAROBJID && pCursor->currentObjectId <= pGOA->m_nNextCharArrayID[0]);
 }
 
+static void ResetCursor(goa_cursor *pCursor)
+{
+    pCursor->currentObjectId   = 0;
+    pCursor->objectTypeEQFilter = 0;
+    pCursor->areaIdEQFilter    = 0;
+    pCursor->tagEQFilterActive = false;
+    pCursor->tagEQFilter[0]    = '\0';
+    pCursor->tagLikeFilterActive = false;
+    pCursor->tagLikeFilter[0]  = '\0';
+}
+
 static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, int argc, sqlite3_value **argv)
 {
     (void)idxStr;
     auto *pCursor = reinterpret_cast<goa_cursor*>(cur);
 
-    pCursor->currentObjectId = 0;
-    pCursor->objectTypeEQFilter = 0;
-    pCursor->areaIdEQFilter = 0;
-    pCursor->tagEQFilterActive = false;
-    pCursor->tagEQFilter[0] = '\0';
-    pCursor->tagLikeFilterActive = false;
-    pCursor->tagLikeFilter[0] = '\0';
+    ResetCursor(pCursor);
 
     int argIndex = 0;
     if (idxNum & FilterFlags::ObjectTypeEQ)
@@ -370,6 +379,7 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
                 pCursor->tagLikeFilterActive = true;
             }
         }
+        argIndex++;
     }
 
     if (!goaObjectPassesFilters(pCursor, Utils::GetGameObject(pCursor->currentObjectId)))
@@ -378,65 +388,45 @@ static int goaFilter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxStr, i
     return SQLITE_OK;
 }
 
+static constexpr FilterConstraints s_FilterConstraints[] =
+{
+    {FilterFlags::ObjectTypeEQ, GOAColumns::ObjectType, SQLITE_INDEX_CONSTRAINT_EQ},
+    {FilterFlags::AreaIdEQ, GOAColumns::AreaId, SQLITE_INDEX_CONSTRAINT_EQ},
+    {FilterFlags::TagEQ, GOAColumns::Tag, SQLITE_INDEX_CONSTRAINT_EQ   },
+    {FilterFlags::TagLike, GOAColumns::Tag, SQLITE_INDEX_CONSTRAINT_LIKE },
+};
+
 static int goaBestIndex(sqlite3_vtab*, sqlite3_index_info *pIndexInfo)
 {
-    int objectTypeEQIndex = -1;
-    int areaIdEQIndex = -1;
-    int tagEQIndex = -1;
-    int tagLikeIndex = -1;
+    static constexpr auto filtersSize = static_cast<int32_t>(std::size(s_FilterConstraints));
+    int filterConstraints[filtersSize];
+    std::fill(std::begin(filterConstraints), std::end(filterConstraints), -1);
 
-    for (int i = 0; i < pIndexInfo->nConstraint; i++)
+    for (int constraintNum = 0; constraintNum < pIndexInfo->nConstraint; constraintNum++)
     {
-        const auto constraint = pIndexInfo->aConstraint[i];
+        const auto& constraint = pIndexInfo->aConstraint[constraintNum];
+        if (!constraint.usable) continue;
 
-        if (!constraint.usable)
-            continue;
-
-        if (constraint.op == SQLITE_INDEX_CONSTRAINT_EQ)
+        for (int filterNum = 0; filterNum < filtersSize; filterNum++)
         {
-            if (constraint.iColumn == GOAColumns::ObjectType)
-                objectTypeEQIndex = i;
-            else if (constraint.iColumn == GOAColumns::AreaId)
-                areaIdEQIndex = i;
-            else if (constraint.iColumn == GOAColumns::Tag)
-                tagEQIndex = i;
-        }
-        else if (constraint.op == SQLITE_INDEX_CONSTRAINT_LIKE)
-        {
-            if (constraint.iColumn == GOAColumns::Tag)
-                tagLikeIndex = i;
+            const auto& filter = s_FilterConstraints[filterNum];
+            if (constraint.iColumn == filter.column && constraint.op == filter.op)
+            {
+                filterConstraints[filterNum] = constraintNum;
+                break;
+            }
         }
     }
 
     int idxNum = FilterFlags::None;
     int argvIndex = 1;
 
-    if (objectTypeEQIndex != -1)
+    for (int filterNum = 0; filterNum < filtersSize; filterNum++)
     {
-        idxNum |= FilterFlags::ObjectTypeEQ;
-        pIndexInfo->aConstraintUsage[objectTypeEQIndex].argvIndex = argvIndex++;
-        pIndexInfo->aConstraintUsage[objectTypeEQIndex].omit = 1;
-    }
-
-    if (areaIdEQIndex != -1)
-    {
-        idxNum |= FilterFlags::AreaIdEQ;
-        pIndexInfo->aConstraintUsage[areaIdEQIndex].argvIndex = argvIndex++;
-        pIndexInfo->aConstraintUsage[areaIdEQIndex].omit = 1;
-    }
-
-    if (tagEQIndex != -1)
-    {
-        idxNum |= FilterFlags::TagEQ;
-        pIndexInfo->aConstraintUsage[tagEQIndex].argvIndex = argvIndex++;
-        pIndexInfo->aConstraintUsage[tagEQIndex].omit = 1;
-    }
-
-    if (tagLikeIndex != -1)
-    {
-        idxNum |= FilterFlags::TagLike;
-        pIndexInfo->aConstraintUsage[tagLikeIndex].argvIndex = argvIndex++;
-        pIndexInfo->aConstraintUsage[tagLikeIndex].omit = 1;
+        if (filterConstraints[filterNum] == -1) continue;
+        idxNum |= s_FilterConstraints[filterNum].flag;
+        pIndexInfo->aConstraintUsage[filterConstraints[filterNum]].argvIndex = argvIndex++;
+        pIndexInfo->aConstraintUsage[filterConstraints[filterNum]].omit = 1;
     }
 
     pIndexInfo->idxNum = idxNum;
