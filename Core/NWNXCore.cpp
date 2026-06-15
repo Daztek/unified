@@ -510,6 +510,7 @@ void NWNXCore::CreateServerHandler(CAppManager* app)
 void NWNXCore::DestroyServerHandler(CAppManager* app)
 {
     g_CoreShuttingDown = true;
+    MessageBus::Broadcast("NWNX_EVENT_SIGNAL_EVENT", {"NWNX_ON_SHUTDOWN_SERVER", Utils::ObjectIDToString(Utils::GetModule()->m_idSelf)});
     MessageBus::Broadcast("NWNX_CORE_SIGNAL", { "ON_DESTROY_SERVER" });
     VM::ReturnTypeExtension::Cleanup();
     g_core->m_destroyServerHook.reset();
