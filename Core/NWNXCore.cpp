@@ -278,8 +278,15 @@ void NWNXCore::InitialSetupResourceDirectories()
         auto nwnxResDirPath = Config::Get<std::string>("NWNX_RESOURCE_DIRECTORY_PATH", Globals::ExoBase()->m_sUserDirectory.CStr() + std::string("/nwnx"));
         auto nwnxResDirPriority = Config::Get<int32_t>("NWNX_RESOURCE_DIRECTORY_PRIORITY", 70000000);
 
-        std::unordered_map<std::string, std::pair<std::string, int32_t>> resourceDirectories;
-        resourceDirectories.emplace("NWNX", std::make_pair(nwnxResDirPath, nwnxResDirPriority));
+        struct ResourceDirectory
+        {
+            std::string alias;
+            std::string path;
+            int32_t priority;
+        };
+
+        std::vector<ResourceDirectory> resourceDirectories;
+        resourceDirectories.push_back({"NWNX", nwnxResDirPath, nwnxResDirPriority});
 
         if (auto customResmanDefinition = Config::Get<std::string>("CUSTOM_RESMAN_DEFINITION"))
         {
@@ -297,9 +304,9 @@ void NWNXCore::InitialSetupResourceDirectories()
 
                 while (std::fgets(line, 640, file))
                 {
-                    if (sscanf(line, "%s %s %i", alias, path, &priority) == 3)
+                    if (sscanf(line, "%63s %511s %i", alias, path, &priority) == 3)
                     {
-                        resourceDirectories.try_emplace(alias, std::make_pair(path, priority));
+                        resourceDirectories.push_back({alias, path, priority});
                     }
                     else
                     {
@@ -314,20 +321,25 @@ void NWNXCore::InitialSetupResourceDirectories()
                 LOG_ERROR("Failed to open Custom Resman Definition File: %s", crdPath);
         }
 
+        std::sort(resourceDirectories.begin(), resourceDirectories.end(), [](const ResourceDirectory& a, const ResourceDirectory& b)
+        {
+            return a.priority < b.priority;
+        });
+
         for (const auto& resDir : resourceDirectories)
         {
-            CExoString alias = CExoString(resDir.first + ":");
-            CExoString path = CExoString(resDir.second.first);
+            CExoString alias = CExoString(resDir.alias + ":");
+            CExoString path = CExoString(resDir.path);
 
             if (Globals::ExoBase()->m_pcExoAliasList->GetAliasPath(alias).IsEmpty())
             {
-                LOG_INFO("Setting up Resource Directory: %s%s (Priority: %i)", alias, path, resDir.second.second);
+                LOG_INFO("Setting up Resource Directory: %s%s (Priority: %i)", alias, path, resDir.priority);
 
-                g_core->m_CustomResourceDirectoryAliases.emplace_back(resDir.first);
+                g_core->m_CustomResourceDirectoryAliases.emplace_back(resDir.alias);
 
-                Globals::ExoBase()->m_pcExoAliasList->Add(resDir.first, path);
+                Globals::ExoBase()->m_pcExoAliasList->Add(resDir.alias, path);
                 Globals::ExoResMan()->CreateDirectory(alias);
-                Globals::ExoResMan()->AddResourceDirectory(alias, resDir.second.second, true);
+                Globals::ExoResMan()->AddResourceDirectory(alias, resDir.priority, true);
             }
             else
                 LOG_WARNING("Resource Directory with alias '%s' already exists. Please use nwn.ini to redefine base game resource directories.", alias);
