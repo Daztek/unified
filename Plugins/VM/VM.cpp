@@ -1,5 +1,6 @@
 #include "nwnx.hpp"
 #include "API/CVirtualMachine.hpp"
+#include "API/CVirtualMachineDebuggerInstance.hpp"
 
 using namespace NWNXLib;
 using namespace NWNXLib::API;
@@ -250,4 +251,61 @@ NWNX_EXPORT ArgumentStack GetStackSqlQueryValue(ArgumentStack&& args)
 {
     const auto stackLocation = args.extract<int32_t>();
     return Globals::VirtualMachine()->GetStackSqlQueryValue(stackLocation);
+}
+
+NWNX_EXPORT ArgumentStack GetScriptCallStackHash(ArgumentStack&& args)
+{
+    const auto depth = args.extract<int32_t>();
+    ASSERT_OR_THROW(depth >= 0);
+
+    auto* pVM = Globals::VirtualMachine();
+    auto dbg = pVM->GetDebuggerInstance();
+
+    if (!dbg)
+        return 0;
+
+    const int32_t start = pVM->m_nInstructPtrLevel - 1 - depth;
+    if (start < 0)
+        return 0;
+
+    std::string stackKey;
+    bool hasFrame = false;
+
+    for (int32_t i = start; i >= 0; --i)
+    {
+        const int32_t ip = pVM->m_pnRunTimeInstructPtr[i];
+        if (ip <= 0)
+            continue;
+        const int32_t lineEntry = dbg->GenerateLineNumberFromInstructionPointer(ip);
+        if (lineEntry < 0)
+            continue;
+        const int32_t fileId = dbg->m_pDebugLineNumberFileName[lineEntry];
+        if (fileId < 0)
+            continue;
+        const int32_t functionId = dbg->GenerateFunctionIDFromInstructionPointer(ip);
+        if (functionId < 0)
+            continue;
+
+        const int32_t lineNumber = dbg->m_pDebugLineNumberCodeLine[lineEntry];
+        const CExoString& fileName = dbg->m_pDebugSourceFileNames[fileId];
+        const CExoString& functionName = dbg->m_pDebugFunctionNames[functionId];
+
+        stackKey += '|';
+        stackKey += fileName.CStr();
+        stackKey += ':';
+        stackKey += functionName.CStr();
+        stackKey += ':';
+        stackKey += std::to_string(lineNumber);
+
+        hasFrame = true;
+
+        if (functionName == "main")
+            break;
+    }
+
+    if (!hasFrame)
+        return 0;
+
+    const CExoString hashInput(stackKey.c_str());
+    return hashInput.GetHash();
 }

@@ -143,6 +143,11 @@ void NWNX_VM_SetStackSqlQueryValue(int nStackLocation, sqlquery sqlValue);
 // * Returns the value of the sqlquery or an empty query on error.
 sqlquery NWNX_VM_GetStackSqlQueryValue(int nStackLocation);
 
+// Get a hash of the script callstack.
+// - nDepth: 0 = current function, 1 = calling function etc.
+// * Returns a hash or 0 on error.
+int NWNX_VM_GetScriptCallStackHash(int nDepth);
+
 int NWNX_VM_GetScriptReturnValueType()
 {
     NWNXCall(NWNX_VM, "GetScriptReturnValueType");
@@ -319,4 +324,11 @@ sqlquery NWNX_VM_GetStackSqlQueryValue(int nStackLocation)
     NWNXPushInt(nStackLocation);
     NWNXCall(NWNX_VM, "GetStackSqlQueryValue");
     return NWNXPopSqlquery();
+}
+
+int NWNX_VM_GetScriptCallStackHash(int nDepth)
+{
+    NWNXPushInt(nDepth);
+    NWNXCall(NWNX_VM, "GetScriptCallStackHash");
+    return NWNXPopInt();
 }
