@@ -55,6 +55,7 @@ static auto s_id = MessageBus::Subscribe("NWNX_CORE_SIGNAL",
             {
                 LOG_NOTICE("Running module start script chunk: %s", *startChunk);
 
+                Globals::VirtualMachine()->m_pJitCompiler->m_nOptimizationFlags = CSCRIPTCOMPILER_OPTIMIZE_AGGRESSIVE;
                 bool bWrapIntoMain = startChunk->find("void main()") == std::string::npos;
                 if (Globals::VirtualMachine()->RunScriptChunk(*startChunk, 0, true, bWrapIntoMain))
                 {
