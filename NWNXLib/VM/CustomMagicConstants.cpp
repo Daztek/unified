@@ -11,6 +11,7 @@ namespace NWNXLib::VM::CustomMagicConstants
     static constexpr const char* MAGIC_CONSTANT_SENTINEL_FUNCTION = "\x1FNWNX_MAGIC_CONSTANT_TYPE::_FUNCTION_::CA75CA75";
     static constexpr const char* MAGIC_CONSTANT_SENTINEL_FILE = "\x1FNWNX_MAGIC_CONSTANT_TYPE::_FILE_::CA75CA75";
     static constexpr int32_t MAGIC_CONSTANT_SENTINEL_LINE = INT32_MIN + 0xCA75;
+    static constexpr int32_t MAGIC_CONSTANT_SENTINEL_FUNCTIONHASH = INT32_MIN + 0xCA75 + 1;
 
     #define CSCRIPTCOMPILER_OPERATION_ACTION 13
     #define CSCRIPTCOMPILER_OPERATION_CONSTANT_INTEGER 17
@@ -57,6 +58,11 @@ namespace NWNXLib::VM::CustomMagicConstants
                 entry.m_nIntegerData = MAGIC_CONSTANT_SENTINEL_LINE;
                 entry.m_psStringData.Format("%d", MAGIC_CONSTANT_SENTINEL_LINE);
             }
+            else if (entry.m_psIdentifier == "_FUNCTIONHASH_" && entry.m_nReturnType == CSCRIPTCOMPILER_TOKEN_INTEGER_IDENTIFIER)
+            {
+                entry.m_nIntegerData = MAGIC_CONSTANT_SENTINEL_FUNCTIONHASH;
+                entry.m_psStringData.Format("%d", MAGIC_CONSTANT_SENTINEL_FUNCTIONHASH);
+            }
         }
     }
 
@@ -65,8 +71,7 @@ namespace NWNXLib::VM::CustomMagicConstants
         if (!pThis || !pNode)
             return;
 
-        if (pNode->nOperation == CSCRIPTCOMPILER_OPERATION_CONSTANT_STRING &&
-            pNode->m_psStringData)
+        if (pNode->nOperation == CSCRIPTCOMPILER_OPERATION_CONSTANT_STRING && pNode->m_psStringData)
         {
             if (strcmp(pNode->m_psStringData->CStr(), MAGIC_CONSTANT_SENTINEL_FUNCTION) == 0)
             {
@@ -77,9 +82,12 @@ namespace NWNXLib::VM::CustomMagicConstants
                 *pNode->m_psStringData = GetCallSiteFile(pThis, pNode);
             }
         }
-        else if (pNode->nOperation == CSCRIPTCOMPILER_OPERATION_CONSTANT_INTEGER && pNode->nIntegerData == MAGIC_CONSTANT_SENTINEL_LINE)
+        else if (pNode->nOperation == CSCRIPTCOMPILER_OPERATION_CONSTANT_INTEGER)
         {
-            pNode->nIntegerData = pNode->nLine;
+            if (pNode->nIntegerData == MAGIC_CONSTANT_SENTINEL_LINE)
+                pNode->nIntegerData = pNode->nLine;
+            else if (pNode->nIntegerData == MAGIC_CONSTANT_SENTINEL_FUNCTIONHASH)
+                pNode->nIntegerData = pThis->m_sFunctionImpName.GetHash();
         }
     }
 
@@ -101,6 +109,7 @@ namespace NWNXLib::VM::CustomMagicConstants
         const CExoString sCallerFunction = pThis->m_sFunctionImpName;
         const CExoString sCallerFile = GetCallSiteFile(pThis, pNode);
         const int32_t nCallerLine = pNode->nLine;
+        const int32_t nCallerFunctionHash = sCallerFunction.GetHash();
 
         for (int32_t nParam = 0; nParam < entry.m_nParameters; ++nParam)
         {
@@ -147,6 +156,17 @@ namespace NWNXLib::VM::CustomMagicConstants
                     patch.nOldInt = nDefault;
 
                     nDefault = nCallerLine;
+                    vPatches.push_back(patch);
+                }
+                else if (nDefault == MAGIC_CONSTANT_SENTINEL_FUNCTIONHASH)
+                {
+                    PatchedMagicConstantDefault patch;
+                    patch.pEntry = &entry;
+                    patch.nParameter = nParam;
+                    patch.nType = PatchedMagicConstantDefault::Int;
+                    patch.nOldInt = nDefault;
+
+                    nDefault = nCallerFunctionHash;
                     vPatches.push_back(patch);
                 }
             }
