@@ -8,11 +8,39 @@ using namespace NWNXLib::API;
 
 namespace NWNXLib::VM::StackManipulation
 {
+    #define MAX_SUBROUTINES 4096
     static int32_t s_InstrPtrLevelForRecursionLevel[Constants::MAX_RECURSION_LEVEL];
     static int32_t s_StackPointerForRecursionLevel[Constants::MAX_RECURSION_LEVEL];
+    static int32_t s_RunTimeInstructPtr[MAX_SUBROUTINES];
 
     void InitializeHooks()
     {
+        static Hooks::Hook s_PushInstructionPtrHook = Hooks::HookFunction(&CVirtualMachine::PushInstructionPtr,
+        +[](CVirtualMachine* pThis, int32_t nInstructionPointer) -> BOOL
+        {
+            s_RunTimeInstructPtr[pThis->m_nInstructPtrLevel] = nInstructionPointer;
+            ++pThis->m_nInstructPtrLevel;
+            if (pThis->m_nInstructPtrLevel >= MAX_SUBROUTINES)
+            {
+                LOG_ERROR("InstructPtrLevel exceeded!");
+                return false;
+            }
+            return true;
+        }, Hooks::Order::Final);
+
+        static Hooks::Hook s_PopInstructionPtrHook = Hooks::HookFunction(&CVirtualMachine::PopInstructionPtr,
+        +[](CVirtualMachine* pThis, int32_t *pnInstructionPointer) -> BOOL
+        {
+            --pThis->m_nInstructPtrLevel;
+            if (pThis->m_nInstructPtrLevel < 0)
+            {
+                pThis->m_nInstructPtrLevel = 0;
+                return false;
+            }
+            *pnInstructionPointer = s_RunTimeInstructPtr[pThis->m_nInstructPtrLevel];
+            return true;
+        }, Hooks::Order::Final);
+
         static Hooks::Hook s_RunScriptFileHook = Hooks::HookFunction(&CVirtualMachine::RunScriptFile,
         +[](CVirtualMachine *pThis, int32_t nInstructionPointer) -> int32_t
         {
@@ -125,7 +153,7 @@ namespace NWNXLib::VM::StackManipulation
         if (nDepth == 0)
             finalInstructionPointer = currentInstructionPointer;
         else if (nDepth >= 1 && nDepth <= pVM->m_nInstructPtrLevel - 1)
-            finalInstructionPointer = pVM->m_pnRunTimeInstructPtr[functionCount - nDepth];
+            finalInstructionPointer = s_RunTimeInstructPtr[functionCount - nDepth];
         else
             return stackFrame;
 
@@ -134,7 +162,7 @@ namespace NWNXLib::VM::StackManipulation
             --nDepth;
             --functionCount;
             currentStackPointer -= (stackSize >> 2);
-            const int32_t runTimePtr = pVM->m_pnRunTimeInstructPtr[functionCount];
+            const int32_t runTimePtr = s_RunTimeInstructPtr[functionCount];
             functionIdentifier = dbg->GenerateFunctionIDFromInstructionPointer(runTimePtr);
             if (functionIdentifier != -1)
                 stackSize = dbg->GenerateStackSizeAtInstructionPointer(functionIdentifier,runTimePtr);
