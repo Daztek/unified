@@ -33,6 +33,10 @@ struct SqlQueryEngineStructure : public SharedPtrEngineStructure<SqlQueryEngineS
     bool IsEmpty() const override;
     void Clear() override;
     void Unlink() override { assert(!"not implemented"); }
+
+#ifdef NWN_CLASS_EXTENSION_SqlQueryEngineStructure
+    NWN_CLASS_EXTENSION_SqlQueryEngineStructure
+#endif
 };
 
 

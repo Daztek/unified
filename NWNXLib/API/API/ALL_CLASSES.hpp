@@ -313,3 +313,4 @@ struct NWVMachineUtils;
 struct CNWSItemPropertyHandler;
 struct JsonEngineStructure;
 struct SqlQueryEngineStructure;
+struct CCampaignDB;

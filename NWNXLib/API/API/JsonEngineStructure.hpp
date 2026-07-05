@@ -22,6 +22,10 @@ struct JsonEngineStructure : public SharedPtrEngineStructure<JsonEngineStructure
     bool IsEmpty() const override;
     void Clear() override;
     void Unlink() override;
+
+#ifdef NWN_CLASS_EXTENSION_JsonEngineStructure
+    NWN_CLASS_EXTENSION_JsonEngineStructure
+#endif
 };
 
 
