@@ -273,7 +273,7 @@ NWNX_EXPORT ArgumentStack GetScriptCallStackHash(ArgumentStack&& args)
 
     for (int32_t i = start; i >= 0; --i)
     {
-        const int32_t ip = pVM->m_pnRunTimeInstructPtr[i];
+        const int32_t ip = pVM->GetRuntimeInstructionPointer(i);
         if (ip <= 0)
             continue;
         const int32_t lineEntry = dbg->GenerateLineNumberFromInstructionPointer(ip);

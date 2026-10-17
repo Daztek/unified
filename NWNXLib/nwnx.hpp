@@ -331,6 +331,7 @@ namespace VM::StackManipulation
     JsonEngineStructure GetStackJsonValue(int32_t nStackLocation);
     void SetStackSqlQueryValue(int32_t nStackLocation, SqlQueryEngineStructure* sqlValue);
     SqlQueryEngineStructure GetStackSqlQueryValue(int32_t nStackLocation);
+    int32_t GetRuntimeInstructionPointer(int32_t nInstructionPointerLevel);
 }
 
 }

@@ -383,6 +383,13 @@ namespace NWNXLib::VM::StackManipulation
         }
         return SqlQueryEngineStructure{};
     }
+
+    int32_t GetRuntimeInstructionPointer(int32_t nInstructionPointerLevel)
+    {
+        if (nInstructionPointerLevel < 0 || nInstructionPointerLevel >= MAX_SUBROUTINES)
+            return -1;
+        return s_RunTimeInstructPtr[nInstructionPointerLevel];
+    }
 }
 
 VM::StackManipulation::StackFrame CVirtualMachine::GetStackFrame(int32_t nDepth, int32_t nRecursionLevel)
@@ -458,4 +465,9 @@ void CVirtualMachine::SetStackSqlQueryValue(int32_t nStackLocation, SqlQueryEngi
 SqlQueryEngineStructure CVirtualMachine::GetStackSqlQueryValue(int32_t nStackLocation)
 {
     return VM::StackManipulation::GetStackSqlQueryValue(nStackLocation);
+}
+
+int32_t CVirtualMachine::GetRuntimeInstructionPointer(int32_t nInstructionPointerLevel)
+{
+    return VM::StackManipulation::GetRuntimeInstructionPointer(nInstructionPointerLevel);
 }
